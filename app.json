@@ -1,25 +1,77 @@
 {
   "expo": {
-    "name": "memorial-app",
+    "name": "Memorial",
     "slug": "memorial-app",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#141210",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#141210"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "br.bibliavive.memorial",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "O Memorial usa o microfone para transcrever seus registros espirituais por voz.",
+        "NSCameraUsageDescription": "O Memorial usa a câmera para adicionar imagens aos seus registros."
+      }
     },
     "android": {
+      "package": "br.bibliavive.memorial",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#141210"
       },
-      "predictiveBackGestureEnabled": false
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ],
+      "predictiveBackGestureEnabled": true
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/images/notification-icon.png"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-status-bar",
+      "expo-sharing",
+      "expo-audio",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#D9B463"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#141210",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#141210",
+            "image": "./assets/images/splash-icon.png"
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "supabaseUrl": "https://yqnsaslvxmqaeeccmcmg.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxbnNhc2x2eG1xYWVlY2NtY21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0NDk0NzIsImV4cCI6MjA5MDAyNTQ3Mn0.CLj0G4_2TWy1TSoUDkg_vC5ZPIB6DxGeXepwKRo73gE",
+      "eas": {
+        "projectId": "d9ca7d0a-72b8-486b-86cc-a4a779c77d0b"
+      }
     }
   }
 }

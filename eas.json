@@ -1,0 +1,51 @@
+{
+  "cli": {
+    "version": ">= 12.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_ASSEMBLYAI_API_KEY": "${EXPO_PUBLIC_ASSEMBLYAI_API_KEY}",
+        "EXPO_PUBLIC_OPENAI_API_KEY": "${EXPO_PUBLIC_OPENAI_API_KEY}",
+        "EXPO_PUBLIC_SUPABASE_URL": "${EXPO_PUBLIC_SUPABASE_URL}",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "${EXPO_PUBLIC_SUPABASE_ANON_KEY}"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://yqnsaslvxmqaeeccmcmg.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxbnNhc2x2eG1xYWVlY2NtY21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0NDk0NzIsImV4cCI6MjA5MDAyNTQ3Mn0.CLj0G4_2TWy1TSoUDkg_vC5ZPIB6DxGeXepwKRo73gE",
+        "EXPO_PUBLIC_OPENAI_API_KEY": "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",
+        "EXPO_PUBLIC_ASSEMBLYAI_API_KEY": "ba6b97fe1e144f9b879d9795ab834b56",
+        "EXPO_PUBLIC_TYPESAFE_API_URL": "https://bibliavive.com.br/api/scripture-thread"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://yqnsaslvxmqaeeccmcmg.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxbnNhc2x2eG1xYWVlY2NtY21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0NDk0NzIsImV4cCI6MjA5MDAyNTQ3Mn0.CLj0G4_2TWy1TSoUDkg_vC5ZPIB6DxGeXepwKRo73gE",
+        "EXPO_PUBLIC_OPENAI_API_KEY": "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",
+        "EXPO_PUBLIC_ASSEMBLYAI_API_KEY": "ba6b97fe1e144f9b879d9795ab834b56",
+        "EXPO_PUBLIC_TYPESAFE_API_URL": "https://bibliavive.com.br/api/scripture-thread"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
