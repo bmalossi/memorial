@@ -37,6 +37,12 @@
       ],
       "predictiveBackGestureEnabled": true
     },
+    "androidStatusBar": {
+      "hidden": true
+    },
+    "androidNavigationBar": {
+      "visible": "sticky-immersive"
+    },
     "web": {
       "favicon": "./assets/images/notification-icon.png"
     },
@@ -64,7 +70,8 @@
             "image": "./assets/images/splash-icon.png"
           }
         }
-      ]
+      ],
+      "./plugins/withImmersiveMode.js"
     ],
     "extra": {
       "supabaseUrl": "https://yqnsaslvxmqaeeccmcmg.supabase.co",

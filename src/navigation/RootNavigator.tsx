@@ -117,7 +117,7 @@ export function RootNavigator() {
   if (loading) {
     return (
       <View style={[s.splashRoot, { backgroundColor: colors.bg.base }]}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <StatusBar hidden={true} />
         <Image
           source={require('../../assets/images/logo.png')}
           style={s.splashLogo}
@@ -132,7 +132,7 @@ export function RootNavigator() {
 
   return (
     <>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <StatusBar hidden={true} />
       <NavigationContainer ref={navigationRef} theme={navTheme}>
         <RootStack.Navigator
           screenOptions={{ headerShown: false }}

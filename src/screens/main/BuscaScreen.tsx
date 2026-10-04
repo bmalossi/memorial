@@ -203,10 +203,7 @@ export function BuscaScreen({ navigation }: Props) {
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.bg.base}
-      />
+      <StatusBar hidden={true} />
 
       {/* ── Top Header ── */}
       <View style={s.topHeader}>

@@ -258,10 +258,7 @@ export function BibliaScreen({ navigation, route }: Props) {
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.bg.surface}
-      />
+      <StatusBar hidden={true} />
 
       {/* ── Top Header ── */}
       <View style={s.header}>

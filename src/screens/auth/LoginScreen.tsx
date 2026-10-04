@@ -222,7 +222,7 @@ export function LoginScreen({ navigation }: Props) {
 
   return (
     <>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.bg.base} />
+      <StatusBar hidden={true} />
       <KeyboardAvoidingView
         style={s.root}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

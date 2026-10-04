@@ -122,7 +122,7 @@ function ConnectionCard({
           )}
 
           {typeof connection.confidence === 'number' && (
-            <Text style={conn.confidenceText}>
+            <Text style={[conn.confidenceText, { color: colors.text.muted }]}>
               {Math.round(connection.confidence * 100)}% ressonância
             </Text>
           )}
@@ -138,7 +138,7 @@ function ConnectionCard({
         <Text style={[conn.verseText, { color: isDark ? '#E8E3EE' : colors.text.primary }]}>"{connection.verse_text}"</Text>
 
         {/* Explicação Teológica */}
-        <Text style={conn.explanation}>{connection.explanation}</Text>
+        <Text style={[conn.explanation, { color: colors.text.secondary }]}>{connection.explanation}</Text>
 
         {/* Ações: Ler passagem no Leitor & Compartilhar Card Visual */}
         <View style={conn.actionsRow}>
@@ -148,20 +148,26 @@ function ConnectionCard({
             activeOpacity={0.7}
             accessibilityRole="link"
           >
-            <Text style={conn.readLinkText}>Ler no contexto bíblico</Text>
+            <Text style={[conn.readLinkText, { color: colors.amber.DEFAULT }]}>Ler no contexto bíblico</Text>
             <Feather name="arrow-right" size={13} color={colors.amber.DEFAULT} />
           </TouchableOpacity>
 
           {onSharePassage && (
             <TouchableOpacity
               onPress={() => onSharePassage(connection)}
-              style={conn.shareConnBtn}
+              style={[
+                conn.shareConnBtn,
+                {
+                  backgroundColor: colors.bg.raised,
+                  borderColor: colors.border.subtle,
+                },
+              ]}
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel={`Compartilhar conexão ${connection.reference}`}
             >
               <Feather name="share-2" size={12} color={colors.text.secondary} />
-              <Text style={conn.shareConnText}>Card Visual</Text>
+              <Text style={[conn.shareConnText, { color: colors.text.secondary }]}>Card Visual</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -286,12 +292,13 @@ const conn = StyleSheet.create({
 
 // ─── Estado de processamento IA ───────────────────────────────────────────────
 function ProcessingState() {
+  const { colors } = useTheme();
   return (
-    <View style={proc.wrap}>
+    <View style={[proc.wrap, { backgroundColor: colors.bg.surface, borderColor: colors.border.DEFAULT }]}>
       <ActivityIndicator size="small" color={colors.amber.DEFAULT} />
       <View style={proc.textWrap}>
-        <Text style={proc.title}>Mapeando conexões nas Escrituras…</Text>
-        <Text style={proc.subtitle}>
+        <Text style={[proc.title, { color: colors.text.primary }]}>Mapeando conexões nas Escrituras…</Text>
+        <Text style={[proc.subtitle, { color: colors.text.muted }]}>
           Identificando passagens correspondentes e ecos bíblicos para este registro.
         </Text>
       </View>
@@ -335,13 +342,14 @@ function NoConnectionsState({
   onGenerate: () => void;
   isAnalyzing: boolean;
 }) {
+  const { colors } = useTheme();
   return (
-    <View style={empty.wrap}>
-      <View style={empty.iconBadge}>
+    <View style={[empty.wrap, { backgroundColor: colors.bg.surface, borderColor: colors.border.DEFAULT }]}>
+      <View style={[empty.iconBadge, { backgroundColor: colors.bg.raised, borderColor: `${colors.amber.DEFAULT}30` }]}>
         <Feather name="compass" size={22} color={colors.amber.DEFAULT} />
       </View>
-      <Text style={empty.label}>Descobrir Conexões Bíblicas</Text>
-      <Text style={empty.sub}>
+      <Text style={[empty.label, { color: colors.text.primary }]}>Descobrir Conexões Bíblicas</Text>
+      <Text style={[empty.sub, { color: colors.text.muted }]}>
         Mapeie passagens correspondentes, promessas e ecos de aliança nas Escrituras relacionados a este memorial.
       </Text>
 
@@ -349,7 +357,7 @@ function NoConnectionsState({
         onPress={onGenerate}
         disabled={isAnalyzing}
         activeOpacity={0.82}
-        style={[empty.actionBtn, isAnalyzing && { opacity: 0.6 }]}
+        style={[empty.actionBtn, { backgroundColor: colors.amber.DEFAULT }, isAnalyzing && { opacity: 0.6 }]}
         accessibilityRole="button"
         accessibilityLabel="Mapear conexões bíblicas"
       >
@@ -829,10 +837,7 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.bg.surface}
-      />
+      <StatusBar hidden={true} />
 
       <ScreenHeader
         onBack={handleBack}

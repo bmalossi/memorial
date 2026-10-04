@@ -538,7 +538,7 @@ function ScreenHeader({
 
         <TouchableOpacity
           onPress={onToggleSearch}
-          style={header.iconBtn}
+          style={[header.iconBtn, { backgroundColor: colors.bg.surface, borderColor: colors.border.DEFAULT }]}
           accessibilityLabel="Buscar registros"
           accessibilityRole="button"
         >
@@ -1052,10 +1052,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
 
   return (
     <View style={[ls.root, { backgroundColor: colors.bg.base, paddingTop: insets.top }]}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.bg.base}
-      />
+      <StatusBar hidden={true} />
 
       <ScreenHeader
         onAvatarPress={() => navigation?.navigate?.('Perfil')}
