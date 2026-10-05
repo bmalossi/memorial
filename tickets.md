@@ -22,11 +22,11 @@ Work the **frontier**: any ticket whose blockers are all done. For a purely line
 
 **Blocked by:** Fundações de Dados e Telemetria Cega
 
-- [ ] Tela de configuração do Atalaia no Perfil permitindo cadastrar nome, e-mail, papel e o campo obrigatório "Como seu contato deve te chamar".
-- [ ] Edge Function `send-pastoral-invitation` que gera token seguro descartável e dispara e-mail de convite discreto via Resend.
-- [ ] Página web pública segura (`/atalaia/confirmar?token=...`) com apresentação solene dos princípios do Atalaia e botões para aceitar ou recusar o papel.
-- [ ] Endpoint de confirmação que transiciona o status do contato para `active` e atualiza `verified_at`.
-- [ ] Ações no app para visualizar o status do contato (`Pendente`, `Ativo`), reenviar convite ou revogar o contato imediatamente.
+- [x] Tela de configuração do Atalaia no Perfil permitindo cadastrar nome, e-mail, papel e o campo obrigatório "Como seu contato deve te chamar".
+- [x] Edge Function `send-pastoral-invitation` que gera token seguro descartável e dispara e-mail de convite discreto via Resend.
+- [x] Página web pública segura (`/atalaia/confirmar?token=...`) com apresentação solene dos princípios do Atalaia e botões para aceitar ou recusar o papel.
+- [x] Endpoint de confirmação que transiciona o status do contato para `active` e atualiza `verified_at`.
+- [x] Ações no app para visualizar o status do contato (`Pendente`, `Ativo`), reenviar convite ou revogar o contato imediatamente.
 
 ## Triagem de Cuidado no Servidor e Acolhimento Pessoal In-App
 

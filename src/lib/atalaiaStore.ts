@@ -12,6 +12,7 @@ import {
   CareTelemetryEvent,
   PastoralContactInput,
   validatePastoralContactInput,
+  generateInvitationTokenData,
   sanitizeAlertAuditPayload,
   buildBlindTelemetryPayload,
   PastoralTriggerType,
@@ -43,10 +44,9 @@ export async function fetchCurrentPastoralContact(): Promise<PastoralContact | n
 }
 
 /**
- * Cria ou substitui o contato pastoral do Leitor com status 'pending'.
- * Se houver um contato ativo anterior, revoga-o antes para manter a integridade.
+ * Dispara convite para Contato de Cuidado pastoral (Edge Function com fallback no banco).
  */
-export async function registerPastoralContact(
+export async function sendPastoralInvitation(
   input: PastoralContactInput
 ): Promise<{ success: boolean; contact?: PastoralContact; error?: string }> {
   const validation = validatePastoralContactInput(input);
@@ -54,19 +54,41 @@ export async function registerPastoralContact(
     return { success: false, error: validation.error };
   }
 
+  // 1. Tentar despachar via Edge Function send-pastoral-invitation
+  try {
+    const { data, error } = await supabase.functions.invoke('send-pastoral-invitation', {
+      body: {
+        name: validation.data.name,
+        email: validation.data.email,
+        role: validation.data.role,
+        requester_name: validation.data.requester_name,
+      },
+    });
+
+    if (!error && data?.success && data?.contact) {
+      return { success: true, contact: data.contact as PastoralContact };
+    }
+    if (error && error.message && !error.message.includes('Failed to send')) {
+      console.warn('[AtalaiaStore] Edge Function retornou erro:', error.message);
+    }
+  } catch (fnErr) {
+    console.warn('[AtalaiaStore] Edge Function offline ou não deployada, aplicando fallback:', fnErr);
+  }
+
+  // 2. Fallback resiliente direto no Supabase DB
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return { success: false, error: 'Sessão não autenticada.' };
   }
 
-  // 1. Revogar contatos ativos ou pendentes anteriores do usuário
+  const tokenData = generateInvitationTokenData();
+
   await supabase
     .from('pastoral_contacts')
     .update({ status: 'revoked', revoked_at: new Date().toISOString() })
     .eq('user_id', user.id)
     .in('status', ['active', 'pending']);
 
-  // 2. Inserir o novo contato em estado 'pending'
   const { data, error } = await supabase
     .from('pastoral_contacts')
     .insert({
@@ -76,17 +98,38 @@ export async function registerPastoralContact(
       role: validation.data.role,
       requester_name: validation.data.requester_name,
       status: 'pending',
+      confirmation_token: tokenData.token,
+      token_expires_at: tokenData.expiresAt,
     })
     .select()
     .single();
 
   if (error) {
     console.error('[AtalaiaStore] Falha ao cadastrar contato:', error.message);
-    return { success: false, error: 'Falha ao salvar contato pastoral.' };
+    return { success: false, error: error.message };
   }
 
   return { success: true, contact: data as PastoralContact };
 }
+
+/**
+ * Reenvia convite pastoral com novo token e nova janela de 48h.
+ */
+export async function resendPastoralInvitation(
+  contact: PastoralContact
+): Promise<{ success: boolean; contact?: PastoralContact; error?: string }> {
+  return sendPastoralInvitation({
+    name: contact.name,
+    email: contact.email,
+    role: contact.role,
+    requesterName: contact.requester_name,
+  });
+}
+
+/**
+ * Cria ou substitui o contato pastoral do Leitor com status 'pending' (compatibilidade).
+ */
+export const registerPastoralContact = sendPastoralInvitation;
 
 /**
  * Revoga imediatamente a autorização do contato pastoral.

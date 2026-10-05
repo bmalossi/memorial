@@ -20,6 +20,7 @@ export interface PastoralContact {
   requester_name: string;
   status: PastoralContactStatus;
   confirmation_token?: string | null;
+  token_expires_at?: string | null;
   verified_at?: string | null;
   revoked_at?: string | null;
   created_at: string;
@@ -131,3 +132,184 @@ export function buildBlindTelemetryPayload(input: {
     created_at: new Date().toISOString(),
   };
 }
+
+/**
+ * Gera token seguro para convite pastoral e define a expiração para 48 horas (ADR 0002).
+ */
+export function generateInvitationTokenData(baseDate?: Date): { token: string; expiresAt: string } {
+  const now = baseDate || new Date();
+  const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
+
+  // Gera token com garantia de entropia (32+ chars)
+  let randomHex = '';
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    randomHex = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+  } else {
+    randomHex = Math.random().toString(36).substring(2) +
+      Math.random().toString(36).substring(2) +
+      Date.now().toString(36) +
+      Math.random().toString(36).substring(2);
+  }
+
+  return {
+    token: randomHex.substring(0, 48),
+    expiresAt,
+  };
+}
+
+/**
+ * Avalia se o token de convite pastoral já expirou.
+ */
+export function isTokenExpired(tokenExpiresAt: string | null | undefined, now?: Date): boolean {
+  if (!tokenExpiresAt) return true;
+  const expirationTime = new Date(tokenExpiresAt).getTime();
+  const currentTime = (now || new Date()).getTime();
+  return currentTime > expirationTime;
+}
+
+/**
+ * Transiciona o estado do convite com base na decisão do pastor via web.
+ */
+export function processInvitationTokenDecision(params: {
+  contact: PastoralContact;
+  token: string;
+  action: 'accept' | 'decline';
+  now?: Date;
+}): { success: boolean; updatedContact?: PastoralContact; error?: string } {
+  const { contact, token, action, now = new Date() } = params;
+
+  if (contact.status !== 'pending') {
+    return { success: false, error: 'O convite não está mais pendente.' };
+  }
+
+  if (isTokenExpired(contact.token_expires_at, now)) {
+    return { success: false, error: 'Este convite expirou (token expirado, validade máxima de 48 horas).' };
+  }
+
+  if (!contact.confirmation_token || contact.confirmation_token !== token) {
+    return { success: false, error: 'Token de confirmação inválido ou já utilizado.' };
+  }
+
+  if (action === 'accept') {
+    return {
+      success: true,
+      updatedContact: {
+        ...contact,
+        status: 'active',
+        verified_at: now.toISOString(),
+        confirmation_token: null,
+        updated_at: now.toISOString(),
+      },
+    };
+  } else {
+    return {
+      success: true,
+      updatedContact: {
+        ...contact,
+        status: 'rejected',
+        confirmation_token: null,
+        updated_at: now.toISOString(),
+      },
+    };
+  }
+}
+
+/**
+ * Invariante de Segurança: Alertas só podem ser emitidos para contatos com status 'active'.
+ */
+export function canSendPastoralAlert(contact: PastoralContact | null | undefined): boolean {
+  if (!contact) return false;
+  return contact.status === 'active';
+}
+
+/**
+ * Constrói payload seguro para disparo de convite via Resend.
+ * INVARIANTE: Zero vazamento de notas, scores, ou memórias íntimas.
+ */
+export function buildInvitationEmailPayload(params: {
+  requesterName: string;
+  contactName: string;
+  contactEmail: string;
+  token: string;
+  webBaseUrl?: string;
+}): { to: string; subject: string; html: string; text: string } {
+  const baseUrl = (params.webBaseUrl || 'https://bibliavive.com.br').replace(/\/$/, '');
+  const confirmUrl = `${baseUrl}/atalaia/confirmar?token=${encodeURIComponent(params.token)}`;
+
+  const subject = `[Bíblia Vive] ${params.requesterName} indicou você como Contato de Cuidado`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Convite de Cuidado Pastoral — Atalaia</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0E0D11; color: #EFECE6; margin: 0; padding: 40px 20px;">
+  <div style="max-width: 560px; margin: 0 auto; background-color: #18171D; border: 1px solid #2B2836; border-radius: 12px; padding: 36px 32px;">
+    <div style="font-size: 11px; letter-spacing: 2px; color: #E7B075; text-transform: uppercase; margin-bottom: 12px; font-weight: 600;">
+      BÍBLIA VIVE · ATALAIA
+    </div>
+    <h1 style="font-size: 22px; font-weight: 600; color: #F7F5F0; margin: 0 0 20px 0; line-height: 1.4;">
+      Convite de Cuidado Pastoral
+    </h1>
+    <p style="font-size: 15px; line-height: 1.6; color: #CBC7BD; margin: 0 0 16px 0;">
+      Olá, <strong>${params.contactName}</strong>.
+    </p>
+    <p style="font-size: 15px; line-height: 1.6; color: #CBC7BD; margin: 0 0 20px 0;">
+      <strong>${params.requesterName}</strong> indicou você como pessoa de confiança e porto seguro de oração no aplicativo Memorial.
+    </p>
+
+    <div style="background-color: #211F27; border-left: 3px solid #E7B075; padding: 16px; border-radius: 6px; margin: 24px 0;">
+      <p style="font-size: 13px; font-weight: 600; color: #E7B075; margin: 0 0 6px 0;">
+        "O Memorial guarda. O Atalaia cuida."
+      </p>
+      <p style="font-size: 13px; line-height: 1.6; color: #9E988D; margin: 0;">
+        O Memorial é o espaço secreto onde o leitor registra orações e reflexões diante de Deus.
+        Você <strong>nunca terá acesso às anotações</strong> ou ao conteúdo de suas memórias.
+        Seu papel é exclusivamente espiritual: estar presente em oração e enviar uma palavra de carinho caso ele precise de amparo.
+      </p>
+    </div>
+
+    <p style="font-size: 14px; line-height: 1.6; color: #CBC7BD; margin: 0 0 28px 0;">
+      Para confirmar ou declinar sua disponibilidade neste papel pastoral, clique no botão abaixo diretamente em seu navegador (não é necessário baixar o aplicativo):
+    </p>
+
+    <div style="text-align: center; margin: 32px 0;">
+      <a href="${confirmUrl}" style="background-color: #E7B075; color: #121116; font-size: 15px; font-weight: 600; text-decoration: none; padding: 14px 28px; border-radius: 8px; display: inline-block;">
+        Responder ao Convite de Cuidado
+      </a>
+    </div>
+
+    <p style="font-size: 12px; color: #726E7E; text-align: center; margin: 24px 0 0 0;">
+      Este link é seguro e válido por 48 horas.<br/>
+      Se você não conhece quem enviou ou não puder atender no momento, você pode declinar respeitosamente na página.
+    </p>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const text = `
+BÍBLIA VIVE · ATALAIA
+Convite de Cuidado Pastoral
+
+Olá, ${params.contactName}.
+
+${params.requesterName} indicou você como Contato de Cuidado pastoral no Memorial.
+
+"O Memorial guarda. O Atalaia cuida."
+O Memorial é o espaço íntimo do leitor. Você nunca terá acesso às anotações ou orações escritas por ele. Seu papel é ser um porto seguro de oração.
+
+Acesse o link abaixo em seu navegador para responder ao convite (válido por 48h):
+${confirmUrl}
+  `.trim();
+
+  return {
+    to: params.contactEmail,
+    subject,
+    html,
+    text,
+  };
+}
+

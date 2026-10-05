@@ -36,6 +36,9 @@ import {
   PRESET_TIMES,
   DEFAULT_NOTIFICATION_SETTINGS,
 } from '../../lib/notificationService';
+import { AtalaiaContactModal } from '../../components/memorial/AtalaiaContactModal';
+import { PastoralContact } from '../../lib/atalaiaTypes';
+import { fetchCurrentPastoralContact } from '../../lib/atalaiaStore';
 
 interface Props {
   navigation?: any;
@@ -83,11 +86,16 @@ export function PerfilScreen({ navigation }: Props) {
   const [notifSoftAskVisible, setNotifSoftAskVisible] = useState(false);
   const [isTestingNotif, setIsTestingNotif] = useState(false);
 
+  // Estado do Atalaia (Cuidado Pastoral)
+  const [pastoralContact, setPastoralContact] = useState<PastoralContact | null>(null);
+  const [atalaiaModalVisible, setAtalaiaModalVisible] = useState(false);
+
   const s = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
   const loadUserData = async () => {
     try {
       getNotificationSettings().then(setNotifSettings);
+      fetchCurrentPastoralContact().then(setPastoralContact);
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
       if (user) {
@@ -643,6 +651,65 @@ export function PerfilScreen({ navigation }: Props) {
           </View>
         </View>
 
+        {/* ── Cuidado Pastoral (Atalaia) ── */}
+        <View style={s.sectionWrap}>
+          <Text style={s.sectionHeader}>CUIDADO PASTORAL (ATALAIA)</Text>
+
+          <View style={s.groupedCard}>
+            <TouchableOpacity
+              onPress={() => setAtalaiaModalVisible(true)}
+              style={s.rowItem}
+              activeOpacity={0.7}
+            >
+              <View style={s.rowLabelWrap}>
+                <Feather
+                  name="shield"
+                  size={16}
+                  color={
+                    pastoralContact?.status === 'active'
+                      ? '#7ECB98'
+                      : pastoralContact?.status === 'pending'
+                      ? colors.amber.DEFAULT
+                      : colors.text.secondary
+                  }
+                />
+                <View style={s.rowTextCol}>
+                  <Text style={s.rowLabel}>
+                    {pastoralContact?.status === 'active'
+                      ? `Contato: ${pastoralContact.name}`
+                      : pastoralContact?.status === 'pending'
+                      ? `Aguardando: ${pastoralContact.name}`
+                      : 'Configurar Contato de Cuidado'}
+                  </Text>
+                  <Text style={s.rowSublabel}>
+                    {pastoralContact?.status === 'active'
+                      ? `${pastoralContact.role} · Ele te chama de "${pastoralContact.requester_name}"`
+                      : pastoralContact?.status === 'pending'
+                      ? 'Convite enviado por e-mail (válido por 48h)'
+                      : 'Pessoa de confiança para amparo e oração discreta'}
+                  </Text>
+                </View>
+              </View>
+              <View style={s.rowRightWrap}>
+                {pastoralContact?.status === 'active' ? (
+                  <View style={[s.badgeActive, { backgroundColor: isDark ? '#1B2E1E' : '#E8F5E9' }]}>
+                    <Text style={[s.badgeActiveText, { color: '#7ECB98' }]}>
+                      ATIVO
+                    </Text>
+                  </View>
+                ) : pastoralContact?.status === 'pending' ? (
+                  <View style={[s.badgeActive, s.badgePushActive]}>
+                    <Text style={[s.badgeActiveText, s.badgePushActiveText]}>
+                      PENDENTE
+                    </Text>
+                  </View>
+                ) : null}
+                <Feather name="chevron-right" size={16} color={colors.text.muted} />
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* ── Sincronização em Nuvem ── */}
         <View style={s.sectionWrap}>
           <Text style={s.sectionHeader}>SINCRONIZAÇÃO EM NUVEM</Text>
@@ -838,6 +905,14 @@ export function PerfilScreen({ navigation }: Props) {
         cancelLabel=""
         destructive={syncInfoModal.destructive}
         onConfirm={() => setSyncInfoModal((prev) => ({ ...prev, visible: false }))}
+      />
+
+      {/* ── Modal de Gerenciamento do Contato Pastoral (Atalaia) ── */}
+      <AtalaiaContactModal
+        visible={atalaiaModalVisible}
+        onClose={() => setAtalaiaModalVisible(false)}
+        currentContact={pastoralContact}
+        onContactUpdated={loadUserData}
       />
     </View>
   );
