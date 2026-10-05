@@ -1,0 +1,75 @@
+name: CI / CD - Memorial App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Selecione a ação desejada'
+        required: true
+        default: 'update'
+        type: choice
+        options:
+          - update
+          - build-apk
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: 1. Validação de Tipos e Qualidade
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Instalar Dependências
+        run: npm ci
+
+      - name: Checagem Estrita de Tipos (TypeScript)
+        run: npx tsc --noEmit
+
+  deploy:
+    name: 2. Publicação OTA ou Compilação de APK
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Configurar EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Instalar Dependências
+        run: npm ci
+
+      # Publica atualização Over-The-Air (OTA) silenciosa para os APKs instalados
+      - name: Publicar Atualização Automática OTA (EAS Update)
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'update')
+        run: |
+          npx eas-cli update --channel preview --auto --non-interactive
+
+      # Compila novo instalador APK na nuvem do Expo EAS quando solicitado manualmente
+      - name: Compilar Novo Instalador APK (EAS Build)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'build-apk'
+        run: |
+          npx eas-cli build --platform android --profile preview --non-interactive

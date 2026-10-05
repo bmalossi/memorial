@@ -3,6 +3,12 @@
     "name": "Memorial",
     "slug": "memorial-app",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d9ca7d0a-72b8-486b-86cc-a4a779c77d0b"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "userInterfaceStyle": "dark",
