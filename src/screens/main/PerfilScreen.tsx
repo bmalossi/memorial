@@ -351,13 +351,10 @@ export function PerfilScreen({ navigation }: Props) {
   const handleConfirmSignOut = async () => {
     setIsSigningOut(true);
     try {
-      await supabase.auth.signOut();
       setSignOutConfirmVisible(false);
-      navigation?.reset?.({
-        index: 0,
-        routes: [{ name: 'Auth' }],
-      });
-    } catch {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn('[Perfil] Erro ao deslogar:', e);
       setSignOutConfirmVisible(false);
     } finally {
       setIsSigningOut(false);

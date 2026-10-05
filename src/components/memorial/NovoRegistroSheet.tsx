@@ -13,6 +13,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -388,6 +389,7 @@ export function NovoRegistroSheet({
 
   const handleSave = async () => {
     if (!content.trim()) return;
+    Keyboard.dismiss();
     setSaving(true);
 
     try {
@@ -462,14 +464,48 @@ export function NovoRegistroSheet({
                 </Text>
               </View>
 
-              <TouchableOpacity
-                onPress={onClose}
-                style={s.closeBtn}
-                accessibilityLabel="Fechar"
-                accessibilityRole="button"
-              >
-                <Feather name="x" size={18} color={colors.text.secondary} />
-              </TouchableOpacity>
+              <View style={s.headerActions}>
+                <TouchableOpacity
+                  onPress={handleSave}
+                  disabled={!content.trim() || saving}
+                  style={[
+                    s.headerSaveBtn,
+                    content.trim() && !saving ? s.headerSaveBtnActive : s.headerSaveBtnDisabled,
+                  ]}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Salvar marco"
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color={colors.text.onAmber} />
+                  ) : (
+                    <>
+                      <Feather
+                        name="check"
+                        size={14}
+                        color={content.trim() ? colors.text.onAmber : colors.text.muted}
+                      />
+                      <Text
+                        style={[
+                          s.headerSaveBtnText,
+                          content.trim() ? s.headerSaveBtnTextActive : s.headerSaveBtnTextDisabled,
+                        ]}
+                      >
+                        Salvar
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={onClose}
+                  style={s.closeBtn}
+                  accessibilityLabel="Fechar"
+                  accessibilityRole="button"
+                >
+                  <Feather name="x" size={18} color={colors.text.secondary} />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <ScrollView
@@ -783,7 +819,10 @@ export function NovoRegistroSheet({
                 </Text>
               </View>
 
-              {/* ── 6. Botão Primário ("Gordinho Suave" Canônico) ── */}
+            </ScrollView>
+
+            {/* ── 6. Rodapé Fixo Docked ("Gordinho Suave" Canônico) ── */}
+            <View style={s.fixedFooter}>
               <TouchableOpacity
                 style={[
                   s.saveButton,
@@ -804,7 +843,7 @@ export function NovoRegistroSheet({
                   </>
                 )}
               </TouchableOpacity>
-            </ScrollView>
+            </View>
           </Animated.View>
         </KeyboardAvoidingView>
       </View>
@@ -904,6 +943,48 @@ function getSheetStyles(colors: ColorTokens, isDark: boolean) {
     fontSize: 12,
   },
 
+  headerActions: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           spacing['2'],
+    marginLeft:    spacing['2'],
+  },
+
+  headerSaveBtn: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'center',
+    height:            32,
+    paddingHorizontal: 12,
+    borderRadius:      radius.full,
+    gap:               5,
+  },
+
+  headerSaveBtnActive: {
+    backgroundColor: colors.amber.DEFAULT,
+    ...themedShadows.amber,
+  },
+
+  headerSaveBtnDisabled: {
+    backgroundColor: colors.bg.raised,
+    borderWidth:     1,
+    borderColor:     colors.border.DEFAULT,
+    opacity:         0.45,
+  },
+
+  headerSaveBtnText: {
+    fontSize:   12,
+    fontWeight: typography.weight.bold,
+  },
+
+  headerSaveBtnTextActive: {
+    color: colors.text.onAmber,
+  },
+
+  headerSaveBtnTextDisabled: {
+    color: colors.text.muted,
+  },
+
   closeBtn: {
     width:           32,
     height:          32,
@@ -913,11 +994,10 @@ function getSheetStyles(colors: ColorTokens, isDark: boolean) {
     justifyContent:  'center',
     borderWidth:     1,
     borderColor:     colors.border.DEFAULT,
-    marginLeft:      spacing['2'],
   },
 
   scroll: {
-    maxHeight: SCREEN_HEIGHT * 0.74,
+    maxHeight: SCREEN_HEIGHT * 0.62,
   },
 
   scrollContent: {
@@ -1303,6 +1383,15 @@ function getSheetStyles(colors: ColorTokens, isDark: boolean) {
     fontSize:      16,
     fontWeight:    typography.weight.bold,
     letterSpacing: 0.2,
+  },
+
+  fixedFooter: {
+    paddingHorizontal: spacing['5'],
+    paddingTop:        spacing['2'],
+    paddingBottom:     spacing['2'],
+    borderTopWidth:    StyleSheet.hairlineWidth,
+    borderTopColor:    colors.border.DEFAULT,
+    backgroundColor:   colors.bg.surface,
   },
 
   // ── Card de Citação da Escritura ──
