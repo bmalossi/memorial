@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Linking,
@@ -62,6 +61,37 @@ export function AtalaiaContactModal({
   const [rateLimitAlertVisible, setRateLimitAlertVisible] = useState(false);
   const [rateLimitMessage, setRateLimitMessage] = useState('');
 
+  // Diálogo Editorial de Feedback (Substitui Alert.alert nativo/slop)
+  const [feedbackDialog, setFeedbackDialog] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    icon?: 'check' | 'mail' | 'send' | 'alert-circle' | 'shield';
+    buttonText?: string;
+    onDismiss?: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+  });
+
+  const showFeedback = (params: {
+    title: string;
+    message: string;
+    icon?: 'check' | 'mail' | 'send' | 'alert-circle' | 'shield';
+    buttonText?: string;
+    onDismiss?: () => void;
+  }) => {
+    setFeedbackDialog({
+      visible: true,
+      title: params.title,
+      message: params.message,
+      icon: params.icon || 'check',
+      buttonText: params.buttonText || 'Entendido',
+      onDismiss: params.onDismiss,
+    });
+  };
+
   const [alertHistory, setAlertHistory] = useState<PastoralAlert[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
@@ -108,16 +138,28 @@ export function AtalaiaContactModal({
         );
         setRateLimitAlertVisible(true);
       } else if (res.success) {
-        Alert.alert(
-          'Pedido Enviado',
-          `Avisamos ${currentContact?.name || 'seu contato'} que você gostaria de conversar. Ele foi orientado a entrar em contato com brevidade.`
-        );
-        loadHistory();
+        showFeedback({
+          title: 'Pedido de Conversa Enviado',
+          message: `Avisamos ${currentContact?.name || 'seu contato'} que você gostaria de conversar. Ele foi orientado a entrar em contato com afeto e brevidade.`,
+          icon: 'check',
+          buttonText: 'Entendido',
+          onDismiss: () => loadHistory(),
+        });
       } else {
-        Alert.alert('Erro', res.message || 'Falha ao enviar pedido de conversa.');
+        showFeedback({
+          title: 'Não foi possível enviar',
+          message: res.message || 'Falha ao solicitar conversa pastoral.',
+          icon: 'alert-circle',
+          buttonText: 'Voltar',
+        });
       }
     } catch (err: any) {
-      Alert.alert('Erro', err?.message || 'Erro inesperado ao solicitar conversa.');
+      showFeedback({
+        title: 'Não foi possível enviar',
+        message: err?.message || 'Erro inesperado ao solicitar conversa.',
+        icon: 'alert-circle',
+        buttonText: 'Voltar',
+      });
     } finally {
       setIsSendingExplicit(false);
     }
@@ -150,13 +192,17 @@ export function AtalaiaContactModal({
       if (!res.success) {
         setErrorMessage(res.error || 'Não foi possível enviar o convite.');
       } else {
-        Alert.alert(
-          'Convite Enviado',
-          `Um convite discreto foi enviado para ${email}. O link é válido por 48 horas.`
-        );
-        setIsReplacing(false);
-        onContactUpdated();
-        onClose();
+        showFeedback({
+          title: 'Convite Pastoral Enviado',
+          message: `Um convite discreto e fraterno foi enviado para ${email}.\n\nO link é seguro e válido por 48 horas. Seu contato poderá responder diretamente pelo navegador, sem necessidade de baixar o aplicativo.`,
+          icon: 'send',
+          buttonText: 'Concluir',
+          onDismiss: () => {
+            setIsReplacing(false);
+            onContactUpdated();
+            onClose();
+          },
+        });
       }
     } catch (e: any) {
       setErrorMessage(e?.message || 'Erro inesperado ao enviar convite.');
@@ -171,16 +217,28 @@ export function AtalaiaContactModal({
     try {
       const res = await resendPastoralInvitation(currentContact);
       if (res.success) {
-        Alert.alert(
-          'Convite Reenviado',
-          `Novo e-mail com link válido por 48 horas foi enviado para ${currentContact.email}.`
-        );
-        onContactUpdated();
+        showFeedback({
+          title: 'Convite Reenviado',
+          message: `Novo link de confirmação válido por 48 horas foi enviado para ${currentContact.email}.`,
+          icon: 'mail',
+          buttonText: 'Entendido',
+          onDismiss: () => onContactUpdated(),
+        });
       } else {
-        Alert.alert('Erro', res.error || 'Falha ao reenviar convite.');
+        showFeedback({
+          title: 'Falha no Reenvio',
+          message: res.error || 'Não foi possível reenviar o convite.',
+          icon: 'alert-circle',
+          buttonText: 'Voltar',
+        });
       }
     } catch (e: any) {
-      Alert.alert('Erro', e?.message || 'Erro inesperado ao reenviar.');
+      showFeedback({
+        title: 'Falha no Reenvio',
+        message: e?.message || 'Erro inesperado ao reenviar.',
+        icon: 'alert-circle',
+        buttonText: 'Voltar',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -196,7 +254,12 @@ export function AtalaiaContactModal({
         onContactUpdated();
         onClose();
       } else {
-        Alert.alert('Erro', res.error || 'Falha ao revogar contato.');
+        showFeedback({
+          title: 'Falha ao Revogar',
+          message: res.error || 'Não foi possível revogar a autorização.',
+          icon: 'alert-circle',
+          buttonText: 'Voltar',
+        });
       }
     } finally {
       setIsRevoking(false);
@@ -239,9 +302,14 @@ export function AtalaiaContactModal({
           contentContainerStyle={s.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Card de Governança Editorial */}
+          {/* Pacto de Governança Editorial (Design Contemplativo, sem AI-slop) */}
           <View style={s.governanceCard}>
+            <View style={s.governanceHeaderRow}>
+              <Feather name="shield" size={13} color={colors.amber.DEFAULT} />
+              <Text style={s.governanceKicker}>PACTO DE CONFIDENCIALIDADE</Text>
+            </View>
             <Text style={s.governanceTitle}>"O Memorial guarda. O Atalaia cuida."</Text>
+            <View style={s.governanceDivider} />
             <Text style={s.governanceBody}>
               Seu contato <Text style={s.boldText}>nunca terá acesso</Text> às suas anotações,
               orações íntimas ou memórias escritas diante de Deus. O papel dele é ser um porto
@@ -283,10 +351,12 @@ export function AtalaiaContactModal({
                 </View>
 
                 {currentContact.status === 'pending' && (
-                  <View style={s.pendingNoticeBox}>
-                    <Feather name="clock" size={14} color={colors.amber.DEFAULT} />
-                    <Text style={s.pendingNoticeText}>
-                      Um convite foi enviado por e-mail com link válido por 48 horas.
+                  <View style={s.pendingMetaRow}>
+                    <View style={s.pendingMetaIconWrap}>
+                      <Feather name="clock" size={13} color={colors.amber.DEFAULT} />
+                    </View>
+                    <Text style={s.pendingMetaText}>
+                      Convite enviado por e-mail · Link válido por 48 horas
                     </Text>
                   </View>
                 )}
@@ -636,6 +706,55 @@ export function AtalaiaContactModal({
           </View>
         </View>
       )}
+
+      {/* Diálogo Editorial de Feedback (Substitui Alert.alert nativo do sistema) */}
+      {feedbackDialog.visible && (
+        <View style={s.modalOverlay}>
+          <Pressable
+            style={s.overlayBackdrop}
+            onPress={() => {
+              const dismiss = feedbackDialog.onDismiss;
+              setFeedbackDialog((prev) => ({ ...prev, visible: false }));
+              dismiss?.();
+            }}
+          />
+          <View style={s.feedbackDialogBox}>
+            <View
+              style={[
+                s.feedbackIconBox,
+                feedbackDialog.icon === 'alert-circle'
+                  ? { backgroundColor: isDark ? '#3D1C1F' : '#FDE8E8' }
+                  : { backgroundColor: isDark ? '#2B261D' : '#F7EBDC' },
+              ]}
+            >
+              <Feather
+                name={feedbackDialog.icon || 'check'}
+                size={24}
+                color={
+                  feedbackDialog.icon === 'alert-circle'
+                    ? colors.error
+                    : colors.amber.DEFAULT
+                }
+              />
+            </View>
+            <Text style={s.feedbackTitle}>{feedbackDialog.title}</Text>
+            <Text style={s.feedbackMessage}>{feedbackDialog.message}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                const dismiss = feedbackDialog.onDismiss;
+                setFeedbackDialog((prev) => ({ ...prev, visible: false }));
+                dismiss?.();
+              }}
+              style={s.feedbackPrimaryBtn}
+              activeOpacity={0.8}
+            >
+              <Text style={s.feedbackPrimaryBtnText}>
+                {feedbackDialog.buttonText || 'Entendido'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </Modal>
   );
 }
@@ -689,22 +808,39 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       gap: spacing['4'],
     },
     governanceCard: {
-      backgroundColor: isDark ? '#1C1A22' : '#F9F7F1',
-      borderLeftWidth: 3,
-      borderLeftColor: colors.amber.DEFAULT,
+      backgroundColor: isDark ? '#18161D' : '#F9F7F2',
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(231,176,117,0.18)' : 'rgba(180,130,70,0.16)',
       borderRadius: radius.md,
-      padding: spacing['3'],
+      padding: spacing['4'],
     },
-    governanceTitle: {
-      fontSize: 14,
+    governanceHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 6,
+    },
+    governanceKicker: {
+      fontSize: 10,
+      letterSpacing: 1.5,
       fontWeight: '700',
       color: colors.amber.DEFAULT,
-      marginBottom: 6,
+      textTransform: 'uppercase',
+    },
+    governanceTitle: {
+      fontSize: 15,
+      fontStyle: 'italic',
+      color: colors.text.primary,
       fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    },
+    governanceDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border.subtle,
+      marginVertical: 10,
     },
     governanceBody: {
       fontSize: 13,
-      lineHeight: 18,
+      lineHeight: 19,
       color: colors.text.secondary,
     },
     boldText: {
@@ -764,19 +900,28 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       fontWeight: '600',
       color: colors.amber.DEFAULT,
     },
-    pendingNoticeBox: {
+    pendingMetaRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-      backgroundColor: isDark ? '#26221A' : '#FFF8EE',
-      borderRadius: radius.sm,
-      padding: spacing['2'],
-      marginTop: 6,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border.subtle,
+      paddingTop: spacing['3'],
+      marginTop: 4,
     },
-    pendingNoticeText: {
-      fontSize: 12,
-      color: colors.amber.DEFAULT,
+    pendingMetaIconWrap: {
+      width: 22,
+      height: 22,
+      borderRadius: radius.full,
+      backgroundColor: isDark ? 'rgba(231,176,117,0.12)' : 'rgba(231,176,117,0.18)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    pendingMetaText: {
+      fontSize: 12.5,
+      color: colors.text.secondary,
       flex: 1,
+      lineHeight: 17,
     },
     actionsGroup: {
       gap: spacing['2'],
@@ -1186,6 +1331,63 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
     rateLimitOkBtnText: {
       fontSize: 14,
       color: colors.text.muted,
+    },
+    feedbackDialogBox: {
+      width: '100%',
+      maxWidth: 380,
+      backgroundColor: colors.bg.surface,
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+      padding: spacing['6'],
+      alignItems: 'center',
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.35,
+          shadowRadius: 16,
+        },
+        android: {
+          elevation: 10,
+        },
+      }),
+    },
+    feedbackIconBox: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing['3'],
+    },
+    feedbackTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.text.primary,
+      fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+      textAlign: 'center',
+      marginBottom: spacing['2'],
+    },
+    feedbackMessage: {
+      fontSize: 13.5,
+      lineHeight: 20,
+      color: colors.text.secondary,
+      textAlign: 'center',
+      marginBottom: spacing['5'],
+    },
+    feedbackPrimaryBtn: {
+      width: '100%',
+      backgroundColor: colors.amber.DEFAULT,
+      borderRadius: radius.md,
+      paddingVertical: 13,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    feedbackPrimaryBtnText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text.onAmber,
     },
   });
 }
