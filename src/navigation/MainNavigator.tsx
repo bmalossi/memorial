@@ -9,7 +9,7 @@ import { BuscaScreen } from '../screens/main/BuscaScreen';
 import { PerfilScreen } from '../screens/main/PerfilScreen';
 
 export type MainTabParamList = {
-  LinhasaGrada: undefined;
+  LinhaSagrada: undefined;
   Biblia: {
     book_slug?: string;
     chapter?: number;
@@ -27,14 +27,14 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 type FeatherName = React.ComponentProps<typeof Feather>['name'];
 
 const TAB_ICONS: Record<string, FeatherName> = {
-  LinhasaGrada: 'bookmark',
+  LinhaSagrada: 'bookmark',
   Biblia:       'book-open',
   Busca:        'search',
   Perfil:       'user',
 };
 
 const TAB_LABELS: Record<string, string> = {
-  LinhasaGrada: 'Linha Sagrada',
+  LinhaSagrada: 'Linha Sagrada',
   Biblia:       'Bíblia',
   Busca:        'Busca',
   Perfil:       'Perfil',
@@ -80,7 +80,7 @@ export function MainNavigator() {
         ),
       })}
     >
-      <Tab.Screen name="LinhasaGrada" component={LinhasagradaScreen} />
+      <Tab.Screen name="LinhaSagrada" component={LinhasagradaScreen} />
       <Tab.Screen name="Biblia"       component={BibliaScreen} />
       <Tab.Screen name="Busca"        component={BuscaScreen} />
       <Tab.Screen name="Perfil"       component={PerfilScreen} />

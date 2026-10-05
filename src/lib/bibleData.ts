@@ -30,7 +30,7 @@ export const BIBLE_BOOKS: BibleBookInfo[] = [
   { name: 'Esdras', slug: 'ed', testament: 'AT', chapters: 10, abbrev: 'Ed' },
   { name: 'Neemias', slug: 'ne', testament: 'AT', chapters: 13, abbrev: 'Ne' },
   { name: 'Ester', slug: 'et', testament: 'AT', chapters: 10, abbrev: 'Et' },
-  { name: 'Jó', slug: 'job', testament: 'AT', chapters: 42, abbrev: 'Jó' },
+  { name: 'Jó', slug: 'jo', testament: 'AT', chapters: 42, abbrev: 'Jó' },
   { name: 'Salmos', slug: 'sl', testament: 'AT', chapters: 150, abbrev: 'Sl' },
   { name: 'Provérbios', slug: 'pv', testament: 'AT', chapters: 31, abbrev: 'Pv' },
   { name: 'Eclesiastes', slug: 'ec', testament: 'AT', chapters: 12, abbrev: 'Ec' },
@@ -57,8 +57,8 @@ export const BIBLE_BOOKS: BibleBookInfo[] = [
   { name: 'Mateus', slug: 'mt', testament: 'NT', chapters: 28, abbrev: 'Mt' },
   { name: 'Marcos', slug: 'mc', testament: 'NT', chapters: 16, abbrev: 'Mc' },
   { name: 'Lucas', slug: 'lc', testament: 'NT', chapters: 24, abbrev: 'Lc' },
-  { name: 'João', slug: 'jo', testament: 'NT', chapters: 21, abbrev: 'Jo' },
-  { name: 'Atos', slug: 'at', testament: 'NT', chapters: 28, abbrev: 'At' },
+  { name: 'João', slug: 'joa', testament: 'NT', chapters: 21, abbrev: 'Jo' },
+  { name: 'Atos', slug: 'atos', testament: 'NT', chapters: 28, abbrev: 'At' },
   { name: 'Romanos', slug: 'rm', testament: 'NT', chapters: 16, abbrev: 'Rm' },
   { name: '1 Coríntios', slug: '1co', testament: 'NT', chapters: 16, abbrev: '1Co' },
   { name: '2 Coríntios', slug: '2co', testament: 'NT', chapters: 13, abbrev: '2Co' },
@@ -185,9 +185,9 @@ const OFFLINE_CHAPTERS: Record<string, BibleChapterData> = {
       { number: 39, text: 'Nem a altura, nem a profundidade, nem alguma outra criatura nos poderá separar do amor de Deus, que está em Cristo Jesus nosso Senhor.' },
     ],
   },
-  'jo:1': {
+  'joa:1': {
     bookName: 'João',
-    bookSlug: 'jo',
+    bookSlug: 'joa',
     chapter: 1,
     title: 'O Verbo se fez carne',
     verses: [
@@ -200,33 +200,153 @@ const OFFLINE_CHAPTERS: Record<string, BibleChapterData> = {
       { number: 14, text: 'E o Verbo se fez carne, e habitou entre nós, e vimos a sua glória, como a glória do unigênito do Pai, cheio de graça e de verdade.' },
     ],
   },
+  'sl:120': {
+    bookName: 'Salmos',
+    bookSlug: 'sl',
+    chapter: 120,
+    title: 'Cântico dos degraus. Oração na angústia',
+    verses: [
+      { number: 1, text: 'Na minha angústia clamei ao SENHOR, e me ouviu.' },
+      { number: 2, text: 'Senhor, livra a minha alma dos lábios mentirosos e da língua enganadora.' },
+      { number: 3, text: 'Que te será dado, ou que te será acrescentado, língua enganadora?' },
+      { number: 4, text: 'Flechas agudas do poderoso, com brasas vivas de zimbro.' },
+      { number: 5, text: 'Ai de mim, que peregrino em Meseque, e habito nas tendas de Quedar.' },
+      { number: 6, text: 'A minha alma bastante tempo habitou com os que detestam a paz.' },
+      { number: 7, text: 'Pacífico sou, mas quando eu falo já eles procuram a guerra.' },
+    ],
+  },
+  'jo:6': {
+    bookName: 'Jó',
+    bookSlug: 'jo',
+    chapter: 6,
+    title: 'Resposta de Jó aos seus amigos',
+    verses: [
+      { number: 1, text: 'Então Jó respondeu, e disse:' },
+      { number: 2, text: 'Oh! se a minha queixa de fato se pesasse, e a minha calamidade se pusesse juntamente numa balança!' },
+      { number: 24, text: 'Ensinai-me, e eu me calarei; e fazei-me entender em que errei.' },
+      { number: 26, text: 'Porventura buscareis palavras para me repreenderdes, visto que as razões do desesperado são como vento?' },
+    ],
+  },
 };
 
 /**
- * Normaliza slug para compatibilidade de busca
+ * Mapeamento Canônico dos slugs do Bíblia Vive para os nomes de pastas
+ * do repositório público ACF (MatheusGois/bible).
+ * Garante que os 66 livros da Bíblia sejam encontrados sem erro 404.
+ */
+export const ROUTE_TO_GITHUB_ID: Record<string, string> = {
+  sl: 'ps',     // Salmos -> ps (Corrige Salmos 120 e todos os Salmos)
+  ps: 'ps',
+  pv: 'prv',    // Provérbios -> prv
+  ct: 'so',     // Cânticos -> so
+  jo: 'job',    // Jó (slug canônico 'jo') -> job
+  job: 'job',   // Jó alias
+  joa: 'jo',    // João (slug canônico 'joa') -> jo
+  atos: 'act',  // Atos (slug canônico 'atos') -> act
+  at: 'act',    // Atos alias
+  jz: 'jud',    // Juízes -> jud
+  '1rs': '1kgs', // 1 Reis
+  '2rs': '2kgs', // 2 Reis
+  '1cr': '1ch',  // 1 Crônicas
+  '2cr': '2ch',  // 2 Crônicas
+  os: 'ho',     // Oséias -> ho
+  mq: 'mi',     // Miquéias -> mi
+  hc: 'hk',     // Habacuque -> hk
+  sf: 'zp',     // Sofonias -> zp
+  ag: 'hg',     // Ageu -> hg
+  mc: 'mk',     // Marcos -> mk
+  lc: 'lk',     // Lucas -> lk
+  ef: 'eph',    // Efésios -> eph
+  fp: 'ph',     // Filipenses -> ph
+  tg: 'jm',     // Tiago -> jm
+  ap: 're',     // Apocalipse -> re
+  ed: 'ezr',    // Esdras -> ezr
+  fm: 'phm',    // Filemom -> phm
+};
+
+/**
+ * Normaliza slug para compatibilidade de busca e rotas.
+ * Trata com precisão a distinção entre Jó ('jo') e João ('joa').
  */
 export function normalizeBookSlug(input: string): string {
-  const clean = input.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (clean === 'salmos' || clean === 'salmo' || clean === 'sl') return 'sl';
-  if (clean === 'filipenses' || clean === 'fp') return 'fp';
-  if (clean === 'romanos' || clean === 'rm') return 'rm';
-  if (clean === 'joao' || clean === 'jo') return 'jo';
-  if (clean === 'isaias' || clean === 'is') return 'is';
-  if (clean === 'proverbios' || clean === 'pv') return 'pv';
-  if (clean === 'hebreus' || clean === 'hb') return 'hb';
-  if (clean === '2reis' || clean === '2rs') return '2rs';
-  if (clean === 'deuteronomio' || clean === 'dt') return 'dt';
-  if (clean === '1samuel' || clean === '1sm') return '1sm';
+  if (!input) return 'sl';
+  const clean = input
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+  // Salmos
+  if (clean === 'salmos' || clean === 'salmo' || clean === 'sl' || clean === 'ps') return 'sl';
+  // Jó vs João
+  if (clean === 'jo' || clean === 'job') return 'jo';
+  if (clean === 'joao' || clean === 'joa' || clean === 'joh') return 'joa';
+  // Atos
+  if (clean === 'atos' || clean === 'at' || clean === 'act') return 'atos';
+  // Demais mapeamentos frequentes
+  if (clean === 'filipenses' || clean === 'fp' || clean === 'ph' || clean === 'phi') return 'fp';
+  if (clean === 'romanos' || clean === 'rm' || clean === 'rom') return 'rm';
+  if (clean === 'isaias' || clean === 'is' || clean === 'isa') return 'is';
+  if (clean === 'proverbios' || clean === 'pv' || clean === 'prv' || clean === 'pro') return 'pv';
+  if (clean === 'hebreus' || clean === 'hb' || clean === 'heb') return 'hb';
+  if (clean === '2reis' || clean === '2rs' || clean === '2kgs') return '2rs';
+  if (clean === '1reis' || clean === '1rs' || clean === '1kgs') return '1rs';
+  if (clean === 'deuteronomio' || clean === 'dt' || clean === 'deu') return 'dt';
+  if (clean === '1samuel' || clean === '1sm' || clean === 'sa1') return '1sm';
+  if (clean === '2samuel' || clean === '2sm' || clean === 'sa2') return '2sm';
+  if (clean === '1cronicas' || clean === '1cr' || clean === '1ch' || clean === 'ch1') return '1cr';
+  if (clean === '2cronicas' || clean === '2cr' || clean === '2ch' || clean === 'ch2') return '2cr';
+  if (clean === 'canticos' || clean === 'ct' || clean === 'so' || clean === 'sol') return 'ct';
+  if (clean === 'oseias' || clean === 'os' || clean === 'ho' || clean === 'hos') return 'os';
+  if (clean === 'miqueias' || clean === 'mq' || clean === 'mi' || clean === 'mic') return 'mq';
+  if (clean === 'habacuque' || clean === 'hc' || clean === 'hk' || clean === 'hab') return 'hc';
+  if (clean === 'sofonias' || clean === 'sf' || clean === 'zp' || clean === 'zep') return 'sf';
+  if (clean === 'ageu' || clean === 'ag' || clean === 'hg' || clean === 'hag') return 'ag';
+  if (clean === 'marcos' || clean === 'mc' || clean === 'mk' || clean === 'mar') return 'mc';
+  if (clean === 'lucas' || clean === 'lc' || clean === 'lk' || clean === 'luk') return 'lc';
+  if (clean === 'efesios' || clean === 'ef' || clean === 'eph') return 'ef';
+  if (clean === 'tiago' || clean === 'tg' || clean === 'jm' || clean === 'jam') return 'tg';
+  if (clean === 'apocalipse' || clean === 'ap' || clean === 're' || clean === 'rev') return 'ap';
+  if (clean === 'esdras' || clean === 'ed' || clean === 'ezr') return 'ed';
+  if (clean === 'filemom' || clean === 'fm' || clean === 'phm' || clean === 'plm') return 'fm';
+  if (clean === 'juizes' || clean === 'jz' || clean === 'jud' || clean === 'jdg') return 'jz';
+
   return clean;
 }
 
 export function findBook(slugOrName: string): BibleBookInfo | undefined {
+  if (!slugOrName) return undefined;
   const norm = normalizeBookSlug(slugOrName);
-  return BIBLE_BOOKS.find((b) => b.slug === norm || normalizeBookSlug(b.name) === norm);
+  const cleanInput = slugOrName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+  return BIBLE_BOOKS.find((b) => {
+    const normBookSlug = b.slug.toLowerCase();
+    const cleanBookName = b.name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+    const cleanBookAbbrev = b.abbrev
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
+    return (
+      normBookSlug === norm ||
+      cleanBookName === cleanInput ||
+      cleanBookAbbrev === cleanInput ||
+      cleanBookName === norm
+    );
+  });
 }
 
 /**
- * Busca capítulo bíblico com fallback resiliente
+ * Busca capítulo bíblico com fallback resiliente e suporte aos 66 livros da Bíblia
  */
 export async function loadBibleChapter(bookSlug: string, chapter: number): Promise<BibleChapterData> {
   const normSlug = normalizeBookSlug(bookSlug);
@@ -245,9 +365,12 @@ export async function loadBibleChapter(bookSlug: string, chapter: number): Promi
     abbrev: normSlug,
   };
 
-  // 2. Tenta buscar da API pública do GitHub (ACF - Almeida Corrigida Fiel)
+  // Mapeia para o ID exato da pasta no repositório GitHub (ex: sl -> ps, jo -> job, joa -> jo)
+  const githubId = ROUTE_TO_GITHUB_ID[normSlug] || normSlug;
+
+  // 2. Busca da API pública do GitHub (ACF - Almeida Corrigida Fiel)
   try {
-    const url = `https://raw.githubusercontent.com/MaatheusGois/bible/main/versions/pt-br/acf/${normSlug}/${normSlug}.json`;
+    const url = `https://raw.githubusercontent.com/MaatheusGois/bible/main/versions/pt-br/acf/${githubId}/${githubId}.json`;
     const res = await fetch(url);
     if (res.ok) {
       const data = await res.json();
@@ -269,22 +392,19 @@ export async function loadBibleChapter(bookSlug: string, chapter: number): Promi
       }
     }
   } catch (e) {
-    console.warn(`[Memorial Bible] Falha ao buscar capítulo online para ${normSlug} ${chapter}:`, e);
+    console.warn(`[Memorial Bible] Falha ao buscar capítulo online para ${normSlug} (${githubId}) ${chapter}:`, e);
   }
 
-  // 3. Fallback elegante de demonstração caso esteja sem internet e fora do cache básico
-  const fallbackVerses: BibleVerseItem[] = [
-    { number: 1, text: 'No princípio criou Deus o céu e a terra.' },
-    { number: 2, text: 'E a terra era sem forma e vazia; e havia trevas sobre a face do abismo.' },
-    { number: 3, text: 'E disse Deus: Haja luz; e houve luz.' },
-    { number: 4, text: 'E viu Deus que era boa a luz; e fez Deus separação entre a luz e as trevas.' },
-    { number: 5, text: 'E Deus chamou à luz Dia; e às trevas chamou Noite. E foi a tarde e a manhã, o dia primeiro.' },
-  ];
-
+  // 3. Fallback sem internet caso não esteja em cache prévio
   return {
     bookName: book.name,
     bookSlug: normSlug,
     chapter,
-    verses: fallbackVerses,
+    verses: [
+      {
+        number: 1,
+        text: 'Não foi possível carregar o texto deste capítulo no momento. Verifique sua conexão com a internet.',
+      },
+    ],
   };
 }

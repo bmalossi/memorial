@@ -6,6 +6,7 @@
  */
 
 import { MemorialEntry } from './types';
+import { normalizeBookSlug } from './bibleData';
 
 export interface BibleSearchResult {
   id: string;
@@ -95,7 +96,7 @@ const LOCAL_BIBLE_VERSES: BibleSearchResult[] = [
     id: 'jo-1-1',
     reference: 'João 1:1',
     bookName: 'João',
-    bookSlug: 'jo',
+    bookSlug: 'joa',
     chapter: 1,
     verse: 1,
     text: 'No princípio era o Verbo, e o Verbo estava com Deus, e o Verbo era Deus.',
@@ -444,11 +445,13 @@ export async function searchBibleVerses(
           const cleanRef = sanitizeBibleText(v.reference || `${v.bookName} ${v.chapter}:${v.verse}`);
           const cleanBookName = sanitizeBibleText(v.bookName || v.bookId);
 
+          const resolvedSlug = normalizeBookSlug(v.bookId || v.bookName || 'sl');
+
           results.push({
             id: `${v.bookId}-${v.chapter}-${v.verse}-${offset + results.length}`,
             reference: cleanRef,
             bookName: cleanBookName,
-            bookSlug: (v.bookId || 'sl').toLowerCase(),
+            bookSlug: resolvedSlug,
             chapter: v.chapter || 1,
             verse: v.verse || 1,
             text: cleanedText,

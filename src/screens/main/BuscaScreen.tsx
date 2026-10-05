@@ -479,7 +479,7 @@ export function BuscaScreen({ navigation }: Props) {
             console.warn('Erro ao salvar novo registro a partir da busca:', e);
           }
           setSheetVisible(false);
-          navigation?.navigate?.('LinhasaGrada');
+          navigation?.navigate?.('LinhaSagrada');
         }}
       />
     </View>
