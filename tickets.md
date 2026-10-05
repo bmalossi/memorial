@@ -47,12 +47,12 @@ Work the **frontier**: any ticket whose blockers are all done. For a purely line
 
 **Blocked by:** Gestão do Contato de Cuidado e Convite Web, Triagem de Cuidado no Servidor e Acolhimento Pessoal In-App
 
-- [ ] Componente `PastoralCareBanner` no modo sugestão de sinal exibindo opção de "Enviar sinal de cuidado" e "Agora não".
-- [ ] Modal de confirmação explícita destacando que nenhuma palavra da reflexão será enviada ao pastor.
-- [ ] Edge Function `send-pastoral-alert` que valida autorização ativa do contato antes do envio.
-- [ ] Algoritmo de rate limiting no backend bloqueando reenvios sobre o mesmo registro em menos de 7 dias e permitindo novos registros após 48 horas.
-- [ ] Envio de e-mail via Resend com o modelo pastoral discreto sugerindo puxar conversa com naturalidade.
-- [ ] Registro do disparo na tabela `pastoral_alerts` com timestamp e status de entrega.
+- [x] Componente `PastoralCareBanner` no modo sugestão de sinal exibindo opção de "Enviar sinal de cuidado" e "Agora não".
+- [x] Modal de confirmação explícita destacando que nenhuma palavra da reflexão será enviada ao pastor.
+- [x] Edge Function `send-pastoral-alert` que valida autorização ativa do contato antes do envio.
+- [x] Algoritmo de rate limiting no backend bloqueando reenvios sobre o mesmo registro em menos de 7 dias e permitindo novos registros após 48 horas.
+- [x] Envio de e-mail via Resend com o modelo pastoral discreto sugerindo puxar conversa com naturalidade.
+- [x] Registro do disparo na tabela `pastoral_alerts` com timestamp e status de entrega.
 
 ## Pedido Explícito de Ajuda e Histórico de Sinais
 

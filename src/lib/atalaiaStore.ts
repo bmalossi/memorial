@@ -276,3 +276,85 @@ export async function evaluateCareTriage(entry: {
   }
 }
 
+/**
+ * Dispara um Sinal de Cuidado consentido para o pastor (Edge Function send-pastoral-alert).
+ * Valida autorização ativa e rate limiting (7 dias / 48 horas) no servidor.
+ */
+export async function sendPastoralCareSignal(params: {
+  noteId?: string | null;
+}): Promise<{ success: boolean; rateLimited?: boolean; message?: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke('send-pastoral-alert', {
+      body: {
+        trigger_type: 'care_signal',
+        note_id: params.noteId || null,
+      },
+    });
+
+    if (error) {
+      if (error.message?.includes('rate_limited') || error.message?.includes('429')) {
+        return {
+          success: false,
+          rateLimited: true,
+          message: 'Um sinal já foi enviado recentemente. Respeitamos a janela pastoral.',
+        };
+      }
+      return { success: false, message: error.message };
+    }
+
+    if (data?.error === 'rate_limited') {
+      return {
+        success: false,
+        rateLimited: true,
+        message: data.message,
+      };
+    }
+
+    return { success: Boolean(data?.success), message: data?.message };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Falha de conexão ao enviar sinal.' };
+  }
+}
+
+/**
+ * Dispara um Pedido Explícito de Ajuda direto para o pastor (Edge Function send-pastoral-alert).
+ * Aplica trava de 24 horas no backend.
+ */
+export async function sendExplicitHelpRequest(): Promise<{
+  success: boolean;
+  rateLimited?: boolean;
+  message?: string;
+}> {
+  try {
+    const { data, error } = await supabase.functions.invoke('send-pastoral-alert', {
+      body: {
+        trigger_type: 'explicit_help',
+      },
+    });
+
+    if (error) {
+      if (error.message?.includes('rate_limited') || error.message?.includes('429')) {
+        return {
+          success: false,
+          rateLimited: true,
+          message: 'Você já solicitou amparo hoje. Seu contato foi avisado.',
+        };
+      }
+      return { success: false, message: error.message };
+    }
+
+    if (data?.error === 'rate_limited') {
+      return {
+        success: false,
+        rateLimited: true,
+        message: data.message,
+      };
+    }
+
+    return { success: Boolean(data?.success), message: data?.message };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Falha de conexão ao enviar pedido.' };
+  }
+}
+
+

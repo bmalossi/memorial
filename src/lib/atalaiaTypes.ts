@@ -395,4 +395,176 @@ export function validateTriageResponse(res: any): {
   };
 }
 
+export interface RateLimitResult {
+  allowed: boolean;
+  reason?: 'same_note_7d' | 'distinct_note_48h' | 'explicit_help_24h';
+  remainingHours?: number;
+  message?: string;
+}
+
+/**
+ * Algoritmo de Rate Limiting e Cooldown Diferenciado (ADR 0004):
+ * - Mesmo registro (same note_id): 7 dias (168 horas).
+ * - Novo registro (distinct note_id): 48 horas.
+ * - Pedido Explícito de Ajuda (explicit_help): 24 horas.
+ */
+export function checkPastoralAlertRateLimit(params: {
+  previousAlerts: PastoralAlert[];
+  newTriggerType: PastoralTriggerType;
+  noteId?: string | null;
+  now?: Date;
+}): RateLimitResult {
+  const nowMs = (params.now || new Date()).getTime();
+  const { previousAlerts, newTriggerType, noteId } = params;
+
+  const sortedAlerts = [...previousAlerts].sort(
+    (a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime()
+  );
+
+  // 1. Pedido Explícito de Ajuda: Trava de 24 horas
+  if (newTriggerType === 'explicit_help') {
+    const lastExplicit = sortedAlerts.find((a) => a.trigger_type === 'explicit_help');
+    if (lastExplicit) {
+      const diffMs = nowMs - new Date(lastExplicit.sent_at).getTime();
+      const limit24hMs = 24 * 60 * 60 * 1000;
+      if (diffMs < limit24hMs) {
+        const remainingHours = Math.ceil((limit24hMs - diffMs) / (1000 * 60 * 60));
+        return {
+          allowed: false,
+          reason: 'explicit_help_24h',
+          remainingHours,
+          message:
+            'Você já enviou um pedido de ajuda hoje. Seu contato foi avisado e entrará em contato assim que possível.',
+        };
+      }
+    }
+  }
+
+  // 2. Sinal de Cuidado derivado de Marco de Fé
+  if (newTriggerType === 'care_signal') {
+    // A. Mesmo registro: trava de 7 dias
+    if (noteId) {
+      const sameNoteAlert = sortedAlerts.find(
+        (a) => a.trigger_type === 'care_signal' && a.note_id === noteId
+      );
+      if (sameNoteAlert) {
+        const diffMs = nowMs - new Date(sameNoteAlert.sent_at).getTime();
+        const limit7dMs = 7 * 24 * 60 * 60 * 1000;
+        if (diffMs < limit7dMs) {
+          const remainingHours = Math.ceil((limit7dMs - diffMs) / (1000 * 60 * 60));
+          return {
+            allowed: false,
+            reason: 'same_note_7d',
+            remainingHours,
+            message:
+              'Um sinal de cuidado sobre este mesmo registro já foi enviado recentemente (cooldown pastoral de 7 dias).',
+          };
+        }
+      }
+    }
+
+    // B. Registro distinto: trava de 48 horas
+    const lastCareSignal = sortedAlerts.find((a) => a.trigger_type === 'care_signal');
+    if (lastCareSignal) {
+      const diffMs = nowMs - new Date(lastCareSignal.sent_at).getTime();
+      const limit48hMs = 48 * 60 * 60 * 1000;
+      if (diffMs < limit48hMs) {
+        const remainingHours = Math.ceil((limit48hMs - diffMs) / (1000 * 60 * 60));
+        return {
+          allowed: false,
+          reason: 'distinct_note_48h',
+          remainingHours,
+          message:
+            'Um sinal de cuidado foi enviado nas últimas 48 horas. Aguarde a aproximação pastoral antes de um novo envio.',
+        };
+      }
+    }
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Constrói payload de e-mail discreto para Sinal de Cuidado via Resend.
+ * INVARIANTE: Zero conteúdo do memorial, zero dados clínicos, zero scores.
+ */
+export function buildCareSignalEmailPayload(params: {
+  requesterName: string;
+  contactName: string;
+  contactEmail: string;
+}): { to: string; subject: string; html: string; text: string } {
+  const subject = `[Bíblia Vive] Lembrança Pastoral: ${params.requesterName}`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Lembrança Pastoral — Atalaia</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0E0D11; color: #EFECE6; margin: 0; padding: 40px 20px;">
+  <div style="max-width: 560px; margin: 0 auto; background-color: #18171D; border: 1px solid #2B2836; border-radius: 12px; padding: 36px 32px;">
+    <div style="font-size: 11px; letter-spacing: 2px; color: #E7B075; text-transform: uppercase; margin-bottom: 12px; font-weight: 600;">
+      BÍBLIA VIVE · ATALAIA
+    </div>
+    <h1 style="font-size: 20px; font-weight: 600; color: #F7F5F0; margin: 0 0 16px 0; line-height: 1.4;">
+      Lembrete Afetuoso de Cuidado Pastoral
+    </h1>
+    <p style="font-size: 15px; line-height: 1.6; color: #CBC7BD; margin: 0 0 16px 0;">
+      Olá, <strong>${params.contactName}</strong>.
+    </p>
+    <p style="font-size: 15px; line-height: 1.6; color: #CBC7BD; margin: 0 0 20px 0;">
+      <strong>${params.requesterName}</strong> autorizou este aviso discreto para você. Ele está passando por dias pesados e expressou o desejo de ser lembrado em oração.
+    </p>
+
+    <div style="background-color: #211F27; border-left: 3px solid #E7B075; padding: 16px; border-radius: 6px; margin: 24px 0;">
+      <p style="font-size: 13px; font-weight: 600; color: #E7B075; margin: 0 0 6px 0;">
+        "O Memorial guarda. O Atalaia cuida."
+      </p>
+      <p style="font-size: 13px; line-height: 1.6; color: #9E988D; margin: 0;">
+        Nenhuma palavra da reflexão dele foi compartilhada. O diário espiritual dele diante de Deus continua totalmente privado e inviolável.
+      </p>
+    </div>
+
+    <p style="font-size: 14px; line-height: 1.6; color: #CBC7BD; margin: 0 0 12px 0;">
+      <strong>Como se aproximar?</strong> Recomendamos puxar uma conversa casual e amigável hoje, sem mencionar relatórios técnicos ou sem transparecer qualquer alarme:
+    </p>
+
+    <ul style="font-size: 13px; line-height: 1.8; color: #E7B075; padding-left: 20px; margin: 0 0 24px 0;">
+      <li><em>"Olá, ${params.requesterName}! Lembrei de você em oração hoje e queria saber como você está."</em></li>
+      <li><em>"Passando só para dizer que orei por você hoje. Se precisar conversar ou tomar um café, estou por aqui."</em></li>
+    </ul>
+
+    <p style="font-size: 12px; color: #726E7E; margin: 20px 0 0 0; text-align: center;">
+      Você recebeu esta mensagem porque aceitou ser o Contato de Cuidado pastoral de ${params.requesterName}.
+    </p>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const text = `
+BÍBLIA VIVE · ATALAIA
+Lembrete Pastoral: ${params.requesterName}
+
+Olá, ${params.contactName}.
+
+${params.requesterName} autorizou este aviso discreto. Ele está passando por dias difíceis e gostaria de ser lembrado em oração.
+
+"O Memorial guarda. O Atalaia cuida."
+Nenhuma palavra do memorial foi compartilhada.
+
+Sugestão de aproximação (sem transparecer qualquer alarme):
+"Olá, ${params.requesterName}! Lembrei de você em oração hoje e queria saber como você está."
+  `.trim();
+
+  return {
+    to: params.contactEmail,
+    subject,
+    html,
+    text,
+  };
+}
+
+
 
