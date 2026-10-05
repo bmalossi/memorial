@@ -72,9 +72,9 @@ Work the **frontier**: any ticket whose blockers are all done. For a purely line
 
 **Blocked by:** Pedido Explícito de Ajuda e Histórico de Sinais
 
-- [ ] Teste de isolamento RLS: comprovar que um Contato de Cuidado ativo não consegue consultar nenhuma linha de `user_notes`.
-- [ ] Teste de conteúdo: comprovar que os payloads de e-mail e logs nunca contêm texto de registros, referências bíblicas da reflexão, dados de IA ou scores.
-- [ ] Teste de consentimento: comprovar que uma memória elegível nunca dispara e-mail automaticamente sem interação explícita do Leitor.
-- [ ] Teste de revogação: comprovar que após revogar o contato, qualquer tentativa de disparo é rejeitada imediatamente pelo backend.
-- [ ] Teste de anti-spam: comprovar a rejeição de requisições repetidas violando as regras de 7 dias, 48 horas e 24 horas.
-- [ ] Teste de telemetria: comprovar que eventos em `care_telemetry_events` são gravados sem nenhum identificador de usuário.
+- [x] Teste de isolamento RLS: comprovar que um Contato de Cuidado ativo não consegue consultar nenhuma linha de `user_notes`.
+- [x] Teste de conteúdo: comprovar que os payloads de e-mail e logs nunca contêm texto de registros, referências bíblicas da reflexão, dados de IA ou scores.
+- [x] Teste de consentimento: comprovar que uma memória elegível nunca dispara e-mail automaticamente sem interação explícita do Leitor.
+- [x] Teste de revogação: comprovar que após revogar o contato, qualquer tentativa de disparo é rejeitada imediatamente pelo backend.
+- [x] Teste de anti-spam: comprovar a rejeição de requisições repetidas violando as regras de 7 dias, 48 horas e 24 horas.
+- [x] Teste de telemetria: comprovar que eventos em `care_telemetry_events` são gravados sem nenhum identificador de usuário.
