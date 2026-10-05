@@ -40,6 +40,7 @@ import {
   evaluateCareTriage,
   canShowCareBanner,
   dismissCareBanner,
+  clearCareBannerDismissal,
   sendPastoralCareSignal,
   sendExplicitHelpRequest,
 } from '../../lib/atalaiaStore';
@@ -1032,28 +1033,28 @@ export function LinhasagradaScreen({ navigation }: Props) {
 
       // Avaliação de Triagem de Cuidado Pastoral (Atalaia)
       try {
-        const canShow = await canShowCareBanner();
-        if (canShow) {
-          const evalText = `${saved.title ? saved.title + '\n' : ''}${saved.content || ''}`;
-          const isEligible = await evaluateCareTriage({
-            text: evalText,
-            createdAt: saved.created_at,
-            category: saved.category,
-          });
+        const evalText = `${saved.title ? saved.title + '\n' : ''}${saved.content || ''}`;
+        console.log('[Linhasagrada] Avaliando triagem de cuidado para o registro recém-criado...');
+        const isEligible = await evaluateCareTriage({
+          text: evalText,
+          createdAt: saved.created_at,
+          category: saved.category,
+        });
+        console.log('[Linhasagrada] Resultado da triagem pastoral:', isEligible);
 
-          if (isEligible) {
-            const contact = await fetchCurrentPastoralContact();
-            setPastoralContact(contact);
-            setCareBannerState({
-              visible: true,
-              mode: contact?.status === 'active' ? 'sugestao_sinal' : 'acolhimento',
-              pastorName: contact?.name,
-              noteId: saved.id,
-            });
-          }
+        if (isEligible) {
+          await clearCareBannerDismissal();
+          const contact = await fetchCurrentPastoralContact();
+          setPastoralContact(contact);
+          setCareBannerState({
+            visible: true,
+            mode: contact?.status === 'active' ? 'sugestao_sinal' : 'acolhimento',
+            pastorName: contact?.name,
+            noteId: saved.id,
+          });
         }
       } catch (careErr) {
-        console.warn('[Linhasagrada] Erro silencioso na triagem de cuidado pastoral:', careErr);
+        console.warn('[Linhasagrada] Erro na triagem de cuidado pastoral:', careErr);
       }
     } catch (e) {
       console.warn('Erro ao salvar no Supabase:', e);

@@ -328,7 +328,8 @@ export function shouldEvaluateForCareTriage(createdAt: string | Date, now?: Date
   const diffMs = currentTime - createdTime;
   const max48hMs = 48 * 60 * 60 * 1000;
 
-  return diffMs >= 0 && diffMs <= max48hMs;
+  // Permite tolerância de até 5 minutos para skew de relógio entre cliente e servidor
+  return diffMs >= -300000 && diffMs <= max48hMs;
 }
 
 /**

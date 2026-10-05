@@ -216,10 +216,12 @@ const CARE_BANNER_DISMISS_KEY = '@memorial_care_banner_dismissed_at';
  */
 export async function isAdminUser(): Promise<boolean> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const sessionRes = await supabase.auth.getSession();
+    const user = sessionRes.data?.session?.user || (await supabase.auth.getUser()).data?.user;
     if (!user) return false;
-    const role = (user.app_metadata as any)?.role;
-    return role === 'admin' || user.email === 'contato@automab.dev';
+    const role = (user.app_metadata as any)?.role || (user.user_metadata as any)?.role;
+    const email = user.email?.toLowerCase().trim();
+    return role === 'admin' || email === 'contato@automab.dev';
   } catch {
     return false;
   }
