@@ -233,7 +233,7 @@ export function buildInvitationEmailPayload(params: {
   token: string;
   webBaseUrl?: string;
 }): { to: string; subject: string; html: string; text: string } {
-  const baseUrl = (params.webBaseUrl || 'https://bibliavive.com.br').replace(/\/$/, '');
+  const baseUrl = (params.webBaseUrl || 'https://www.bibliavive.com.br').replace(/\/$/, '');
   const confirmUrl = `${baseUrl}/atalaia/confirmar?token=${encodeURIComponent(params.token)}`;
 
   const subject = `[Bíblia Vive] ${params.requesterName} indicou você como Contato de Cuidado`;
