@@ -32,6 +32,17 @@ import {
 } from '../../lib/memorialStore';
 import { attachAiConnectionsToMemorial } from '../../lib/aiConnectionService';
 import { searchMemorialEntries, SUGGESTED_THEMES } from '../../lib/searchService';
+import { PastoralCareBanner } from '../../components/memorial/PastoralCareBanner';
+import { AtalaiaContactModal } from '../../components/memorial/AtalaiaContactModal';
+import { PastoralContact } from '../../lib/atalaiaTypes';
+import {
+  fetchCurrentPastoralContact,
+  evaluateCareTriage,
+  canShowCareBanner,
+  dismissCareBanner,
+  sendPastoralCareSignal,
+  sendExplicitHelpRequest,
+} from '../../lib/atalaiaStore';
 
 type Filter = 'todos' | MemorialCategory | 'respondidas';
 
@@ -861,6 +872,30 @@ export function LinhasagradaScreen({ navigation }: Props) {
     cloudCount: 0,
   });
 
+  // Estado do Atalaia (Cuidado Pastoral & Triagem Discreta)
+  const [careBannerState, setCareBannerState] = useState<{
+    visible: boolean;
+    mode: 'acolhimento' | 'sugestao_sinal';
+    pastorName?: string;
+    noteId?: string;
+  }>({
+    visible: false,
+    mode: 'acolhimento',
+  });
+  const [atalaiaModalVisible, setAtalaiaModalVisible] = useState(false);
+  const [pastoralContact, setPastoralContact] = useState<PastoralContact | null>(null);
+  const [feedbackDialog, setFeedbackDialog] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    icon?: 'check' | 'mail' | 'send' | 'alert-circle' | 'shield';
+    buttonText?: string;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+  });
+
   const loadData = async () => {
     try {
       const data = await fetchUserMemorials();
@@ -871,14 +906,25 @@ export function LinhasagradaScreen({ navigation }: Props) {
     }
   };
 
+  const loadPastoralContact = async () => {
+    try {
+      const contact = await fetchCurrentPastoralContact();
+      setPastoralContact(contact);
+    } catch (e) {
+      console.warn('[Linhasagrada] Erro ao carregar contato pastoral:', e);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       loadData();
+      loadPastoralContact();
     }, [])
   );
 
   useEffect(() => {
     loadData();
+    loadPastoralContact();
 
     // Inscreve no gerenciador de sincronização em tempo real
     const unsubSync = subscribeToSyncState((state) => {
@@ -907,6 +953,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
           (currentSession.user.email ? currentSession.user.email : 'L');
         setUserInitial(name.trim()[0].toUpperCase());
         loadData();
+        loadPastoralContact();
       }
     });
 
@@ -982,6 +1029,32 @@ export function LinhasagradaScreen({ navigation }: Props) {
         .catch((err) => {
           console.log('[Memorial] Análise de conexões em background concluída com aviso:', err);
         });
+
+      // Avaliação de Triagem de Cuidado Pastoral (Atalaia)
+      try {
+        const canShow = await canShowCareBanner();
+        if (canShow) {
+          const evalText = `${saved.title ? saved.title + '\n' : ''}${saved.content || ''}`;
+          const isEligible = await evaluateCareTriage({
+            text: evalText,
+            createdAt: saved.created_at,
+            category: saved.category,
+          });
+
+          if (isEligible) {
+            const contact = await fetchCurrentPastoralContact();
+            setPastoralContact(contact);
+            setCareBannerState({
+              visible: true,
+              mode: contact?.status === 'active' ? 'sugestao_sinal' : 'acolhimento',
+              pastorName: contact?.name,
+              noteId: saved.id,
+            });
+          }
+        }
+      } catch (careErr) {
+        console.warn('[Linhasagrada] Erro silencioso na triagem de cuidado pastoral:', careErr);
+      }
     } catch (e) {
       console.warn('Erro ao salvar no Supabase:', e);
       const fallback: MemorialEntry = {
@@ -994,8 +1067,112 @@ export function LinhasagradaScreen({ navigation }: Props) {
     }
   };
 
+  const handleDismissCareBanner = async () => {
+    setCareBannerState((prev) => ({ ...prev, visible: false }));
+    await dismissCareBanner();
+  };
+
+  const handleConfigureCareContact = () => {
+    setAtalaiaModalVisible(true);
+  };
+
+  const handleRequestCareSignal = async () => {
+    try {
+      const res = await sendPastoralCareSignal({ noteId: careBannerState.noteId });
+      setCareBannerState((prev) => ({ ...prev, visible: false }));
+      await dismissCareBanner();
+
+      if (res.rateLimited) {
+        setFeedbackDialog({
+          visible: true,
+          title: 'Sinal Já Enviado Recentemente',
+          message:
+            res.message ||
+            'Um sinal de oração já foi enviado para seu contato pastoral recentemente. Respeitamos a janela pastoral.',
+          icon: 'alert-circle',
+        });
+      } else if (res.success) {
+        setFeedbackDialog({
+          visible: true,
+          title: 'Sinal de Cuidado Enviado',
+          message: `Seu contato pastoral (${careBannerState.pastorName || 'cadastrado'}) foi avisado discretamente para orar por você e puxar conversa com carinho. Nenhuma palavra de seu memorial foi enviada.`,
+          icon: 'send',
+        });
+      } else {
+        setFeedbackDialog({
+          visible: true,
+          title: 'Não Foi Possível Enviar',
+          message:
+            res.message ||
+            'Houve um erro de conexão ao enviar o sinal pastoral. Tente novamente mais tarde.',
+          icon: 'alert-circle',
+        });
+      }
+    } catch (err: any) {
+      setFeedbackDialog({
+        visible: true,
+        title: 'Erro de Envio',
+        message: err?.message || 'Falha ao despachar sinal de cuidado pastoral.',
+        icon: 'alert-circle',
+      });
+    }
+  };
+
+  const handleExplicitCareHelp = async () => {
+    try {
+      const res = await sendExplicitHelpRequest();
+      setCareBannerState((prev) => ({ ...prev, visible: false }));
+      await dismissCareBanner();
+
+      if (res.rateLimited) {
+        setFeedbackDialog({
+          visible: true,
+          title: 'Pedido Já Enviado Hoje',
+          message:
+            res.message ||
+            'Você já enviou um pedido de conversa hoje. Seu contato foi notificado e entrará em contato.',
+          icon: 'alert-circle',
+        });
+      } else if (res.success) {
+        setFeedbackDialog({
+          visible: true,
+          title: 'Pedido de Conversa Enviado',
+          message: `Um aviso prioritário foi enviado para seu contato pastoral (${careBannerState.pastorName || 'cadastrado'}). Ele entrará em contato com você com carinho assim que possível.`,
+          icon: 'check',
+        });
+      } else {
+        setFeedbackDialog({
+          visible: true,
+          title: 'Não Foi Possível Enviar',
+          message:
+            res.message ||
+            'Houve um erro de conexão ao enviar o pedido de amparo.',
+          icon: 'alert-circle',
+        });
+      }
+    } catch (err: any) {
+      setFeedbackDialog({
+        visible: true,
+        title: 'Erro de Envio',
+        message: err?.message || 'Falha ao despachar pedido pastoral.',
+        icon: 'alert-circle',
+      });
+    }
+  };
+
   const ListHeader = () => (
     <View style={ls.listHeader}>
+      {careBannerState.visible && (
+        <PastoralCareBanner
+          mode={careBannerState.mode}
+          pastorName={careBannerState.pastorName}
+          onDismiss={handleDismissCareBanner}
+          onConfigureContact={handleConfigureCareContact}
+          onRequestSignal={handleRequestCareSignal}
+          onExplicitHelp={handleExplicitCareHelp}
+          containerStyle={ls.bannerSpacing}
+        />
+      )}
       <EbenezerCard count={entries.length} />
 
       {/* Filtros por Categoria e Status */}
@@ -1157,6 +1334,68 @@ export function LinhasagradaScreen({ navigation }: Props) {
         onClose={() => setSheetVisible(false)}
         onSave={handleSaveNewEntry}
       />
+
+      <AtalaiaContactModal
+        visible={atalaiaModalVisible}
+        onClose={() => setAtalaiaModalVisible(false)}
+        currentContact={pastoralContact}
+        onContactUpdated={async () => {
+          const contact = await fetchCurrentPastoralContact();
+          setPastoralContact(contact);
+        }}
+      />
+
+      {feedbackDialog.visible && (
+        <View style={ls.feedbackOverlay}>
+          <Pressable
+            style={ls.feedbackBackdrop}
+            onPress={() => setFeedbackDialog((prev) => ({ ...prev, visible: false }))}
+          />
+          <View
+            style={[
+              ls.feedbackDialogBox,
+              {
+                backgroundColor: colors.bg.surface,
+                borderColor: colors.border.subtle,
+              },
+            ]}
+          >
+            <View
+              style={[
+                ls.feedbackIconBox,
+                feedbackDialog.icon === 'alert-circle'
+                  ? { backgroundColor: isDark ? '#3D1C1F' : '#FDE8E8' }
+                  : { backgroundColor: isDark ? '#2B261D' : '#F7EBDC' },
+              ]}
+            >
+              <Feather
+                name={feedbackDialog.icon || 'check'}
+                size={24}
+                color={
+                  feedbackDialog.icon === 'alert-circle'
+                    ? colors.error
+                    : colors.amber.DEFAULT
+                }
+              />
+            </View>
+            <Text style={[ls.feedbackTitle, { color: colors.text.primary }]}>
+              {feedbackDialog.title}
+            </Text>
+            <Text style={[ls.feedbackMessage, { color: colors.text.secondary }]}>
+              {feedbackDialog.message}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setFeedbackDialog((prev) => ({ ...prev, visible: false }))}
+              style={[ls.feedbackPrimaryBtn, { backgroundColor: colors.amber.DEFAULT }]}
+              activeOpacity={0.8}
+            >
+              <Text style={[ls.feedbackPrimaryBtnText, { color: colors.text.onAmber }]}>
+                {feedbackDialog.buttonText || 'Entendido'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1267,6 +1506,80 @@ const ls = StyleSheet.create({
     fontSize:      10,
     fontWeight:    typography.weight.semibold,
     letterSpacing: 1.5,
+  },
+  bannerSpacing: {
+    marginHorizontal: spacing['5'],
+    marginBottom:     spacing['4'],
+  },
+  feedbackOverlay: {
+    position:          'absolute',
+    top:               0,
+    left:              0,
+    right:             0,
+    bottom:            0,
+    zIndex:            9999,
+    justifyContent:    'center',
+    alignItems:        'center',
+    paddingHorizontal: spacing['6'],
+  },
+  feedbackBackdrop: {
+    position:        'absolute',
+    top:             0,
+    left:            0,
+    right:           0,
+    bottom:          0,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+  },
+  feedbackDialogBox: {
+    width:        '100%',
+    maxWidth:     380,
+    borderRadius: radius.xl,
+    borderWidth:  1,
+    padding:      spacing['6'],
+    alignItems:   'center',
+    ...Platform.select({
+      ios: {
+        shadowColor:   '#000',
+        shadowOffset:  { width: 0, height: 10 },
+        shadowOpacity: 0.35,
+        shadowRadius:  16,
+      },
+      android: {
+        elevation: 10,
+      },
+    }),
+  },
+  feedbackIconBox: {
+    width:          52,
+    height:         52,
+    borderRadius:   26,
+    alignItems:     'center',
+    justifyContent: 'center',
+    marginBottom:   spacing['3'],
+  },
+  feedbackTitle: {
+    fontSize:     17,
+    fontWeight:   '600',
+    fontFamily:   Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    textAlign:    'center',
+    marginBottom: spacing['2'],
+  },
+  feedbackMessage: {
+    fontSize:     13.5,
+    lineHeight:   20,
+    textAlign:    'center',
+    marginBottom: spacing['5'],
+  },
+  feedbackPrimaryBtn: {
+    width:          '100%',
+    borderRadius:   radius.md,
+    paddingVertical: 13,
+    alignItems:     'center',
+    justifyContent: 'center',
+  },
+  feedbackPrimaryBtnText: {
+    fontSize:   14,
+    fontWeight: '600',
   },
 });
 

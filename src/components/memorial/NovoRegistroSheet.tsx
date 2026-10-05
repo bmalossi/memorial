@@ -79,7 +79,7 @@ export function NovoRegistroSheet({
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
 
-  const [category, setCategory] = useState<MemorialCategory>(initialCategory || 'testemunho');
+  const [category, setCategory] = useState<MemorialCategory>(initialCategory || 'reflexao');
   const [title, setTitle] = useState(initialTitle || '');
   const [content, setContent] = useState(initialContent || '');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -92,17 +92,9 @@ export function NovoRegistroSheet({
   const [showBiblePicker, setShowBiblePicker] = useState(false);
   const [selectedBook, setSelectedBook] = useState(initialBibleRef?.book || 'Salmos');
   const [selectedBookSlug, setSelectedBookSlug] = useState(initialBibleRef?.slug || 'sl');
-  const [chapter, setChapter] = useState(initialBibleRef?.chapter?.toString() || '23');
+  const [chapter, setChapter] = useState(initialBibleRef?.chapter?.toString() || '1');
   const [verse, setVerse] = useState(initialBibleRef?.verse?.toString() || '1');
-  const [bibleRef, setBibleRef] = useState<BibleRef | null>(
-    initialBibleRef || {
-      book: 'Salmos',
-      slug: 'sl',
-      chapter: 23,
-      verse: 1,
-      display: 'Salmos 23:1',
-    }
-  );
+  const [bibleRef, setBibleRef] = useState<BibleRef | null>(initialBibleRef || null);
   const [verseQuoteText, setVerseQuoteText] = useState<string | null>(initialVerseText || null);
 
   // Gravação por voz — requer dev build (expo-av/expo-audio indisponível no Expo Go SDK 57)
@@ -160,15 +152,15 @@ export function NovoRegistroSheet({
 
   useEffect(() => {
     if (visible) {
-      if (initialCategory) {
-        setCategory(initialCategory);
-      }
+      setCategory(initialCategory || 'reflexao');
       if (initialBibleRef) {
         setBibleRef(initialBibleRef);
         setSelectedBook(initialBibleRef.book);
         setSelectedBookSlug(initialBibleRef.slug);
         setChapter(initialBibleRef.chapter.toString());
         setVerse(initialBibleRef.verse ? initialBibleRef.verse.toString() : '1');
+      } else {
+        setBibleRef(null);
       }
       if (initialTitle !== undefined) {
         setTitle(initialTitle);

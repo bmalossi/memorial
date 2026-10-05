@@ -13,13 +13,30 @@
 
 import { AiConnection, JevCategory, MemorialEntry } from './types';
 import { updateMemorialAiConnections } from './memorialStore';
+import { supabase } from './supabase';
 
-// Segurança: Chaves de IA são protegidas em Supabase Secrets e executadas no servidor (ADR Atalaia).
-const OPENAI_API_KEY = '';
+/**
+ * Validador de qualidade de texto.
+ * Impede que digitação aleatória (ex: "skdoaskdoaskdo") receba versículos artificiais.
+ */
+export function isMeaningfulText(text: string): boolean {
+  const trimmed = (text || '').trim();
+  if (trimmed.length < 12) return false;
 
-const TYPESAFE_API_URL =
-  process.env.EXPO_PUBLIC_TYPESAFE_API_URL ||
-  'https://bibliavive.com.br/api/scripture-thread';
+  // Bloco contínuo sem espaços (ex: "skdoaskdoaskdo", "asdfasdfasdf")
+  if (!trimmed.includes(' ') && trimmed.length >= 8) return false;
+
+  const words = trimmed.split(/\s+/).filter((w) => w.length > 0);
+  if (words.length < 2) return false;
+
+  // Repetição de caracteres contínuos (ex: "aaaaaa", "kkkkkkk")
+  if (/(.)\1{4,}/i.test(trimmed)) return false;
+
+  // Sequências de 5 ou mais consoantes seguidas (gibberish aleatório)
+  if (/[bcdfghjklmnpqrstvwxyz]{5,}/i.test(trimmed)) return false;
+
+  return true;
+}
 
 export interface AiGenerationResult {
   connections: AiConnection[];
@@ -163,143 +180,77 @@ function getFallbackConnections(entry: MemorialEntry): AiGenerationResult {
 export async function generateBibleConnections(
   entry: MemorialEntry
 ): Promise<AiGenerationResult> {
-  const cleanKey = OPENAI_API_KEY.trim();
-
-  // Sem chave configurada? Use o fallback reverente
-  if (!cleanKey) {
-    console.log('[AiService] OPENAI_API_KEY não configurada, usando fallback contextual.');
-    return getFallbackConnections(entry);
-  }
-
-  const systemPrompt = `Você é o motor de hermenêutica bíblica e inteligência teológica do Memorial (Bíblia Vive).
-Sua missão solene é analisar o relato de fé do leitor (uma oração, um testemunho de milagre/provisão, uma reflexão bíblica ou um propósito de jejum) e identificar de 1 a 3 passagens bíblicas canônicas fundamentais que convergem com aquela experiência vivida.
-
-DIRETRIZES FUNDAMENTAIS:
-1. Reverência e Gravitas: A IA atua como uma lâmpada para as Escrituras, jamais como conselheiro loquaz ou bajulador. Sem AI slop, sem floreios vazios.
-2. Fidelidade Textual: Citações das Escrituras devem corresponder estritamente ao texto bíblico em português (Almeida ARA/ARC). Nunca alucine versículos.
-3. Taxonomia TypeSafe JEV (System One):
-   Classifique o padrão teológico dominante do relato e de cada conexão em exatamente uma destas 4 categorias:
-   - "Cumprimento_Profetico": prefiguração, tipo e antítipo, promessa bíblica cumprida na aliança ou na vida do leitor.
-   - "Eco_de_Linguagem": ressonância temática, repetição de termos ou metáforas bíblicas fundamentais (ex: cordeiro, rocha, fonte, coluna, tempestade).
-   - "Contraste_de_Alianca": distinção reveladora entre sombra e substância, lei e graça, obras humanas e favor divino.
-   - "Resposta_de_Oracao": clamor, súplica ou petição do leitor que encontra evidência de providência ou intervenção divina nas Escrituras.
-
-FORMATO DE SAÍDA:
-Retorne OBRIGATORIAMENTE um objeto JSON válido no seguinte formato:
-{
-  "primary_jev_category": "Cumprimento_Profetico" | "Eco_de_Linguagem" | "Contraste_de_Alianca" | "Resposta_de_Oracao",
-  "connections": [
-    {
-      "reference": "Salmos 34:18",
-      "book_slug": "sl",
-      "chapter": 34,
-      "verse": 18,
-      "verse_text": "Perto está o Senhor dos que têm o coração quebrantado, e salva os de espírito oprimido.",
-      "explanation": "Explicação editorial breve e profunda (máx 2 frases) de como esta passagem ressoa com a experiência do leitor.",
-      "jev_category": "Resposta_de_Oracao",
-      "confidence": 0.95
-    }
-  ]
-}
-
-Regras para book_slug: use slugs bíblicos padronizados em minúsculas (ex: gn, ex, lv, nm, dt, js, jz, rt, 1sm, 2sm, 1rs, 2rs, 1cr, 2cr, ed, ne, et, jo, sl, pv, ec, ct, is, jr, lm, ez, dn, os, jl, am, ob, jn, mq, na, hc, sf, ag, zc, ml, mt, mc, lc, joa, at, rm, 1co, 2co, gl, ef, fp, cl, 1ts, 2ts, 1tm, 2tm, tt, fm, hb, tg, 1pe, 2pe, 1jo, 2jo, 3jo, jd, ap).`;
-
-  const userPrompt = `DADOS DO MARCO DE FÉ:
-- Categoria: ${entry.category.toUpperCase()}
-- Título: ${entry.title || 'Sem título específico'}
-- Passagem Associada Inicialmente: ${entry.bible_ref?.display || 'Nenhuma informada'}
-- Tags: ${entry.tags?.join(', ') || 'Nenhuma'}
-- Relato do Leitor:
-"""
-${entry.content}
-"""
-
-Analise com solenidade e retorne as conexões bíblicas no formato JSON estrito.`;
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${cleanKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
-      }),
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeout));
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      console.warn(`[AiService] OpenAI retornou HTTP ${response.status}:`, errText);
-      return getFallbackConnections(entry);
-    }
-
-    const data = await response.json();
-    const contentText = data?.choices?.[0]?.message?.content;
-
-    if (!contentText) {
-      console.warn('[AiService] Resposta vazia da OpenAI.');
-      return getFallbackConnections(entry);
-    }
-
-    const parsed = JSON.parse(contentText);
-
-    const validCategories: JevCategory[] = [
-      'Cumprimento_Profetico',
-      'Eco_de_Linguagem',
-      'Contraste_de_Alianca',
-      'Resposta_de_Oracao',
-    ];
-
-    const primaryCategory: JevCategory = validCategories.includes(
-      parsed.primary_jev_category
-    )
-      ? parsed.primary_jev_category
-      : entry.category === 'oracao'
-      ? 'Resposta_de_Oracao'
-      : entry.category === 'testemunho'
-      ? 'Cumprimento_Profetico'
-      : 'Eco_de_Linguagem';
-
-    const rawConnections = Array.isArray(parsed.connections)
-      ? parsed.connections
-      : [];
-
-    const connections: AiConnection[] = rawConnections.map((c: any) => ({
-      reference: String(c.reference || 'Escritura Sagrada'),
-      verse_text: String(c.verse_text || ''),
-      explanation: String(c.explanation || ''),
-      book_slug: String(c.book_slug || 'sl').toLowerCase(),
-      chapter: Number(c.chapter) || 1,
-      verse: Number(c.verse) || 1,
-      jev_category: validCategories.includes(c.jev_category)
-        ? c.jev_category
-        : primaryCategory,
-      confidence: typeof c.confidence === 'number' ? c.confidence : 0.92,
-    }));
-
-    if (connections.length === 0) {
-      return getFallbackConnections(entry);
-    }
-
+  // 1. Verificação de integridade: Digitação aleatória (ex: "skdoaskdoaskdo") ou texto vazio
+  // jamais deve receber conexões bíblicas artificiais.
+  if (!isMeaningfulText(entry.content)) {
     return {
-      connections,
-      jevCategory: primaryCategory,
+      connections: [],
+      jevCategory: 'Eco_de_Linguagem',
     };
+  }
+
+  // 2. Chamar Edge Function segura no servidor Supabase (com a chave OpenAI dos Secrets)
+  try {
+    const { data, error } = await supabase.functions.invoke('memorial-connections', {
+      body: {
+        text: entry.content,
+        title: entry.title,
+        category: entry.category,
+        bibleRef: entry.bible_ref,
+        tags: entry.tags,
+      },
+    });
+
+    if (!error && data) {
+      if (data.empty || !Array.isArray(data.connections) || data.connections.length === 0) {
+        return {
+          connections: [],
+          jevCategory: data.jev_category || 'Eco_de_Linguagem',
+        };
+      }
+
+      const validCategories: JevCategory[] = [
+        'Cumprimento_Profetico',
+        'Eco_de_Linguagem',
+        'Contraste_de_Alianca',
+        'Resposta_de_Oracao',
+      ];
+
+      const primaryCategory: JevCategory = validCategories.includes(data.jev_category)
+        ? data.jev_category
+        : 'Eco_de_Linguagem';
+
+      const connections: AiConnection[] = data.connections.map((c: any) => ({
+        reference: String(c.reference || 'Escritura Sagrada'),
+        verse_text: String(c.verse_text || ''),
+        explanation: String(c.explanation || ''),
+        book_slug: String(c.book_slug || 'sl').toLowerCase(),
+        chapter: Number(c.chapter) || 1,
+        verse: Number(c.verse) || 1,
+        jev_category: validCategories.includes(c.jev_category)
+          ? c.jev_category
+          : primaryCategory,
+        confidence: typeof c.confidence === 'number' ? c.confidence : 0.92,
+      }));
+
+      return {
+        connections,
+        jevCategory: primaryCategory,
+      };
+    }
   } catch (err: any) {
-    console.warn('[AiService] Erro ao invocar OpenAI:', err?.message || err);
+    console.warn('[AiService] Erro ao invocar memorial-connections no Supabase:', err?.message || err);
+  }
+
+  // 3. Fallback somente se for texto real e estruturado (em caso de rede offline)
+  if (isMeaningfulText(entry.content)) {
     return getFallbackConnections(entry);
   }
+
+  return {
+    connections: [],
+    jevCategory: 'Eco_de_Linguagem',
+  };
 }
 
 /**
@@ -310,11 +261,16 @@ export async function attachAiConnectionsToMemorial(
   entry: MemorialEntry
 ): Promise<MemorialEntry> {
   const result = await generateBibleConnections(entry);
+  const hasConnections = result.connections.length > 0;
 
   // Se o ID for válido e não for mock temporário, persiste no Supabase
   if (id && !id.startsWith('mock_')) {
     try {
-      await updateMemorialAiConnections(id, result.connections, result.jevCategory);
+      await updateMemorialAiConnections(
+        id,
+        result.connections,
+        hasConnections ? result.jevCategory : undefined
+      );
     } catch (err) {
       console.warn('[AiService] Falha ao persistir no Supabase, mantendo no estado local:', err);
     }
@@ -322,8 +278,8 @@ export async function attachAiConnectionsToMemorial(
 
   return {
     ...entry,
-    ai_status: 'done',
+    ai_status: hasConnections ? 'done' : 'none',
     ai_connections: result.connections,
-    jev_category: result.jevCategory,
+    jev_category: hasConnections ? result.jevCategory : undefined,
   };
 }
