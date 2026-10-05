@@ -14,10 +14,8 @@
 import { AiConnection, JevCategory, MemorialEntry } from './types';
 import { updateMemorialAiConnections } from './memorialStore';
 
-const OPENAI_API_KEY =
-  process.env.EXPO_PUBLIC_OPENAI_API_KEY ||
-  process.env.OPENAI_API_KEY ||
-  '';
+// Segurança: Chaves de IA são protegidas em Supabase Secrets e executadas no servidor (ADR Atalaia).
+const OPENAI_API_KEY = '';
 
 const TYPESAFE_API_URL =
   process.env.EXPO_PUBLIC_TYPESAFE_API_URL ||

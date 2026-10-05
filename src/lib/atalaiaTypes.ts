@@ -313,3 +313,86 @@ ${confirmUrl}
   };
 }
 
+/**
+ * Filtro de Sincronização Offline (User Story 26):
+ * Apenas registros criados nas últimas 48 horas são elegíveis para triagem de cuidado.
+ * Rascunhos antigos sincronizados posteriormente são excluídos da avaliação retroativa.
+ */
+export function shouldEvaluateForCareTriage(createdAt: string | Date, now?: Date): boolean {
+  const createdTime = new Date(createdAt).getTime();
+  const currentTime = (now || new Date()).getTime();
+  const diffMs = currentTime - createdTime;
+  const max48hMs = 48 * 60 * 60 * 1000;
+
+  return diffMs >= 0 && diffMs <= max48hMs;
+}
+
+/**
+ * Controle de Cooldown Local do Banner In-App (Anti-Fadiga):
+ * Garante intervalo de ao menos 24 horas entre dispensas do banner de amparo no dispositivo.
+ */
+export function shouldShowCareBanner(
+  lastDismissedAt: string | null | undefined,
+  now?: Date
+): boolean {
+  if (!lastDismissedAt) return true;
+
+  const dismissedTime = new Date(lastDismissedAt).getTime();
+  const currentTime = (now || new Date()).getTime();
+  const diffMs = currentTime - dismissedTime;
+  const cooldown24hMs = 24 * 60 * 60 * 1000;
+
+  return diffMs >= cooldown24hMs;
+}
+
+/**
+ * Valida o contrato efêmero da resposta de triagem retornada pela Edge Function.
+ * INVARIANTE: Rejeita qualquer payload que contenha scores clínicos, diagnósticos ou texto espelhado.
+ */
+export function validateTriageResponse(res: any): {
+  isValid: boolean;
+  eligible: boolean;
+  error?: string;
+} {
+  if (!res || typeof res !== 'object') {
+    return { isValid: false, eligible: false, error: 'Resposta de triagem inválida ou ausente.' };
+  }
+
+  // Invariante de Privacidade: Detectar e rejeitar campos impróprios
+  const prohibitedKeys = [
+    'clinical_score',
+    'score',
+    'diagnosis',
+    'diagnostic',
+    'user_reflection_snippet',
+    'reflection',
+    'content',
+    'text',
+    'memory',
+  ];
+
+  for (const key of prohibitedKeys) {
+    if (key in res) {
+      return {
+        isValid: false,
+        eligible: false,
+        error: `Invariante de privacidade violada: payload contém campo proibido '${key}'.`,
+      };
+    }
+  }
+
+  if (typeof res.eligible_for_care_prompt !== 'boolean') {
+    return {
+      isValid: false,
+      eligible: false,
+      error: 'Formato inválido: campo eligible_for_care_prompt deve ser booleano.',
+    };
+  }
+
+  return {
+    isValid: true,
+    eligible: res.eligible_for_care_prompt,
+  };
+}
+
+

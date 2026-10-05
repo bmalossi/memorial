@@ -34,12 +34,12 @@ Work the **frontier**: any ticket whose blockers are all done. For a purely line
 
 **Blocked by:** Fundações de Dados e Telemetria Cega
 
-- [ ] Remoção de qualquer chave de IA ou segredo do bundle do cliente móvel.
-- [ ] Edge Function `care-triage` autenticada por JWT que avalia o texto transitoriamente e devolve apenas a flag booleana efêmera `eligible_for_care_prompt`.
-- [ ] Filtro no app para enviar à triagem apenas registros criados nas últimas 48 horas durante a sincronização de rascunhos offline.
-- [ ] Emissão de evento na tabela `care_telemetry_events` quando a triagem for positiva e o Leitor não possuir contato ativo.
-- [ ] Componente `PastoralCareBanner` no modo Acolhimento Pessoal exibido no app com tom acolhedor, incentivo pastoral e botão direto para ligar para o CVV 188.
-- [ ] Controle de cooldown local no dispositivo para respeitar o tempo do Leitor e evitar fadiga de avisos.
+- [x] Remoção de qualquer chave de IA ou segredo do bundle do cliente móvel.
+- [x] Edge Function `care-triage` autenticada por JWT que avalia o texto transitoriamente e devolve apenas a flag booleana efêmera `eligible_for_care_prompt`.
+- [x] Filtro no app para enviar à triagem apenas registros criados nas últimas 48 horas durante a sincronização de rascunhos offline.
+- [x] Emissão de evento na tabela `care_telemetry_events` quando a triagem for positiva e o Leitor não possuir contato ativo.
+- [x] Componente `PastoralCareBanner` no modo Acolhimento Pessoal exibido no app com tom acolhedor, incentivo pastoral e botão direto para ligar para o CVV 188.
+- [x] Controle de cooldown local no dispositivo para respeitar o tempo do Leitor e evitar fadiga de avisos.
 
 ## Disparo do Sinal de Cuidado com Cooldown Diferenciado
 

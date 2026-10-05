@@ -5,6 +5,8 @@
  * através do cliente Supabase, respeitando rigorosamente as políticas RLS.
  */
 
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import {
   PastoralContact,
@@ -16,6 +18,9 @@ import {
   sanitizeAlertAuditPayload,
   buildBlindTelemetryPayload,
   PastoralTriggerType,
+  shouldEvaluateForCareTriage,
+  shouldShowCareBanner,
+  validateTriageResponse,
 } from './atalaiaTypes';
 
 /**
@@ -203,3 +208,71 @@ export async function emitBlindCareTelemetry(hasCareContact: boolean): Promise<v
     console.warn('[AtalaiaStore] Exceção na telemetria cega:', err);
   }
 }
+
+const CARE_BANNER_DISMISS_KEY = '@memorial_care_banner_dismissed_at';
+
+/**
+ * Registra a dispensa do banner de cuidado localmente para aplicar o cooldown de 24h.
+ */
+export async function dismissCareBanner(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(CARE_BANNER_DISMISS_KEY, new Date().toISOString());
+  } catch (e) {
+    console.warn('[AtalaiaStore] Erro ao persistir dispensa do banner:', e);
+  }
+}
+
+/**
+ * Verifica se o banner de cuidado pode ser exibido respeitando o cooldown local.
+ */
+export async function canShowCareBanner(): Promise<boolean> {
+  try {
+    const lastDismissed = await AsyncStorage.getItem(CARE_BANNER_DISMISS_KEY);
+    return shouldShowCareBanner(lastDismissed);
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Avalia um registro na Triagem de Cuidado no servidor (Edge Function care-triage).
+ * Aplica o filtro de 48h para rascunhos offline antes de realizar qualquer chamada.
+ */
+export async function evaluateCareTriage(entry: {
+  text: string;
+  createdAt: string;
+  category?: string;
+}): Promise<boolean> {
+  // 1. Filtro de 48h para rascunhos sincronizados offline
+  if (!shouldEvaluateForCareTriage(entry.createdAt)) {
+    return false;
+  }
+
+  // 2. Chamar Edge Function care-triage
+  try {
+    const { data, error } = await supabase.functions.invoke('care-triage', {
+      body: {
+        text: entry.text,
+        category: entry.category,
+        platform: Platform.OS || 'android',
+      },
+    });
+
+    if (error) {
+      console.warn('[AtalaiaStore] Erro ao invocar care-triage:', error.message);
+      return false;
+    }
+
+    const validated = validateTriageResponse(data);
+    if (!validated.isValid) {
+      console.warn('[AtalaiaStore] Resposta de triagem rejeitada por violar invariante:', validated.error);
+      return false;
+    }
+
+    return validated.eligible;
+  } catch (err) {
+    console.warn('[AtalaiaStore] Falha de rede ao consultar care-triage:', err);
+    return false;
+  }
+}
+
