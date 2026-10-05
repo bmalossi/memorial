@@ -212,10 +212,40 @@ export async function emitBlindCareTelemetry(hasCareContact: boolean): Promise<v
 const CARE_BANNER_DISMISS_KEY = '@memorial_care_banner_dismissed_at';
 
 /**
+ * Identifica se a sessão atual pertence a um Administrador
+ */
+export async function isAdminUser(): Promise<boolean> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const role = (user.app_metadata as any)?.role;
+    return role === 'admin' || user.email === 'contato@automab.dev';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Limpa qualquer trava local de banner de cuidado (útil para testes imediatos)
+ */
+export async function clearCareBannerDismissal(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(CARE_BANNER_DISMISS_KEY);
+  } catch (e) {
+    console.warn('[AtalaiaStore] Erro ao limpar dispensa do banner:', e);
+  }
+}
+
+/**
  * Registra a dispensa do banner de cuidado localmente para aplicar o cooldown de 24h.
+ * Administradores não recebem trava persistente para permitir testes sucessivos.
  */
 export async function dismissCareBanner(): Promise<void> {
   try {
+    if (await isAdminUser()) {
+      await AsyncStorage.removeItem(CARE_BANNER_DISMISS_KEY);
+      return;
+    }
     await AsyncStorage.setItem(CARE_BANNER_DISMISS_KEY, new Date().toISOString());
   } catch (e) {
     console.warn('[AtalaiaStore] Erro ao persistir dispensa do banner:', e);
@@ -224,9 +254,13 @@ export async function dismissCareBanner(): Promise<void> {
 
 /**
  * Verifica se o banner de cuidado pode ser exibido respeitando o cooldown local.
+ * Administradores sempre podem visualizar o banner para fins de validação e teste.
  */
 export async function canShowCareBanner(): Promise<boolean> {
   try {
+    if (await isAdminUser()) {
+      return true;
+    }
     const lastDismissed = await AsyncStorage.getItem(CARE_BANNER_DISMISS_KEY);
     return shouldShowCareBanner(lastDismissed);
   } catch {
@@ -236,15 +270,17 @@ export async function canShowCareBanner(): Promise<boolean> {
 
 /**
  * Avalia um registro na Triagem de Cuidado no servidor (Edge Function care-triage).
- * Aplica o filtro de 48h para rascunhos offline antes de realizar qualquer chamada.
+ * Aplica o filtro de 48h para rascunhos offline antes de realizar qualquer chamada (ignorado para administradores).
  */
 export async function evaluateCareTriage(entry: {
   text: string;
   createdAt: string;
   category?: string;
 }): Promise<boolean> {
-  // 1. Filtro de 48h para rascunhos sincronizados offline
-  if (!shouldEvaluateForCareTriage(entry.createdAt)) {
+  const isAdmin = await isAdminUser();
+
+  // 1. Filtro de 48h para rascunhos sincronizados offline (ignorado para Admin em modo de teste)
+  if (!isAdmin && !shouldEvaluateForCareTriage(entry.createdAt)) {
     return false;
   }
 
