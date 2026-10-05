@@ -11,10 +11,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   Linking,
+  Pressable,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme, ColorTokens, typography, spacing, radius } from '../../theme';
-import { InputField, ConfirmModal } from '../ui';
+import { InputField } from '../ui';
 import {
   PastoralContact,
   PastoralAlert,
@@ -204,11 +205,13 @@ export function AtalaiaContactModal({
 
   const hasExisting = Boolean(currentContact && !isReplacing);
 
+  if (!visible) return null;
+
   return (
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
@@ -520,40 +523,86 @@ export function AtalaiaContactModal({
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Confirmação de Revogação */}
-      <ConfirmModal
-        visible={revokeConfirmVisible}
-        onClose={() => setRevokeConfirmVisible(false)}
-        title="Revogar Contato de Cuidado?"
-        message="Seu contato pastoral não poderá mais ser notificado e nenhum sinal poderá ser enviado até que um novo contato seja ativado."
-        confirmLabel="Revogar Agora"
-        cancelLabel="Voltar"
-        destructive={true}
-        loading={isRevoking}
-        onConfirm={handleConfirmRevoke}
-      />
-
-      {/* Confirmação de Pedido Explícito de Conversa (Ticket 5) */}
-      <ConfirmModal
-        visible={explicitHelpConfirmVisible}
-        onClose={() => setExplicitHelpConfirmVisible(false)}
-        title={`Pedir Conversa com ${currentContact?.name || 'Contato'}?`}
-        message={`Seu contato pastoral receberá uma notificação prioritária avisando que você gostaria de conversar ou receber uma ligação.\n\nNenhuma palavra de suas memórias ou orações será enviada.`}
-        confirmLabel="Pedir Conversa"
-        cancelLabel="Cancelar"
-        destructive={false}
-        loading={isSendingExplicit}
-        onConfirm={handleSendExplicitHelp}
-      />
-
-      {/* Modal de Trava de 24h com Atalho para CVV 188 (Ticket 5) */}
-      <Modal
-        visible={rateLimitAlertVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setRateLimitAlertVisible(false)}
-      >
+      {/* Confirmação de Revogação (Overlay nativo sem Modal aninhado) */}
+      {revokeConfirmVisible && (
         <View style={s.modalOverlay}>
+          <Pressable style={s.overlayBackdrop} onPress={() => !isRevoking && setRevokeConfirmVisible(false)} />
+          <View style={s.subDialogBox}>
+            <View style={[s.subDialogIconBox, { backgroundColor: isDark ? '#3D1C1F' : '#FDE8E8' }]}>
+              <Feather name="user-x" size={24} color={colors.error} />
+            </View>
+            <Text style={s.subDialogTitle}>Revogar Contato de Cuidado?</Text>
+            <Text style={s.subDialogMessage}>
+              Seu contato pastoral não poderá mais ser notificado e nenhum sinal poderá ser enviado até que um novo contato seja ativado.
+            </Text>
+            <View style={s.subDialogActions}>
+              <TouchableOpacity
+                onPress={handleConfirmRevoke}
+                disabled={isRevoking}
+                style={[s.subDialogBtn, { backgroundColor: colors.error }]}
+                activeOpacity={0.8}
+              >
+                {isRevoking ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={[s.subDialogBtnText, { color: '#FFFFFF' }]}>Revogar Agora</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setRevokeConfirmVisible(false)}
+                disabled={isRevoking}
+                style={s.subDialogCancelBtn}
+                activeOpacity={0.8}
+              >
+                <Text style={s.subDialogCancelText}>Voltar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Confirmação de Pedido Explícito de Conversa (Overlay nativo sem Modal aninhado) */}
+      {explicitHelpConfirmVisible && (
+        <View style={s.modalOverlay}>
+          <Pressable style={s.overlayBackdrop} onPress={() => !isSendingExplicit && setExplicitHelpConfirmVisible(false)} />
+          <View style={s.subDialogBox}>
+            <View style={s.subDialogIconBox}>
+              <Feather name="message-circle" size={24} color={colors.amber.DEFAULT} />
+            </View>
+            <Text style={s.subDialogTitle}>Pedir Conversa com {currentContact?.name || 'Contato'}?</Text>
+            <Text style={s.subDialogMessage}>
+              Seu contato pastoral receberá uma notificação prioritária avisando que você gostaria de conversar ou receber uma ligação.{"\n\n"}Nenhuma palavra de suas memórias ou orações será enviada.
+            </Text>
+            <View style={s.subDialogActions}>
+              <TouchableOpacity
+                onPress={handleSendExplicitHelp}
+                disabled={isSendingExplicit}
+                style={[s.subDialogBtn, { backgroundColor: colors.amber.DEFAULT }]}
+                activeOpacity={0.8}
+              >
+                {isSendingExplicit ? (
+                  <ActivityIndicator size="small" color={colors.text.onAmber} />
+                ) : (
+                  <Text style={[s.subDialogBtnText, { color: colors.text.onAmber }]}>Pedir Conversa</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setExplicitHelpConfirmVisible(false)}
+                disabled={isSendingExplicit}
+                style={s.subDialogCancelBtn}
+                activeOpacity={0.8}
+              >
+                <Text style={s.subDialogCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* Trava de 24h com Atalho para CVV 188 (Overlay nativo sem Modal aninhado) */}
+      {rateLimitAlertVisible && (
+        <View style={s.modalOverlay}>
+          <Pressable style={s.overlayBackdrop} onPress={() => setRateLimitAlertVisible(false)} />
           <View style={s.rateLimitBox}>
             <View style={s.rateLimitIconBox}>
               <Feather name="clock" size={24} color={colors.amber.DEFAULT} />
@@ -586,7 +635,7 @@ export function AtalaiaContactModal({
             </View>
           </View>
         </View>
-      </Modal>
+      )}
     </Modal>
   );
 }
@@ -996,13 +1045,76 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       fontSize: 11,
       color: colors.text.muted,
     },
-    // Estilos do Modal de Cooldown / CVV 188 (Ticket 5)
+    // Estilos de Overlay e Diálogos de Confirmação (Sub-dialogs sem Modal aninhado)
     modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(0, 0, 0, 0.75)',
       justifyContent: 'center',
       alignItems: 'center',
       padding: spacing['4'],
+      zIndex: 9999,
+      elevation: 25,
+    },
+    overlayBackdrop: {
+      ...StyleSheet.absoluteFill,
+    },
+    subDialogBox: {
+      width: '100%',
+      maxWidth: 380,
+      backgroundColor: colors.bg.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border.DEFAULT,
+      padding: spacing['5'],
+      gap: spacing['3'],
+      alignItems: 'center',
+      zIndex: 10000,
+      elevation: 26,
+    },
+    subDialogIconBox: {
+      width: 48,
+      height: 48,
+      borderRadius: radius.full,
+      backgroundColor: isDark ? '#2B261D' : '#F7EBDC',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    subDialogTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.text.primary,
+      textAlign: 'center',
+      fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    },
+    subDialogMessage: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.text.secondary,
+      textAlign: 'center',
+    },
+    subDialogActions: {
+      width: '100%',
+      gap: spacing['2'],
+      marginTop: spacing['2'],
+    },
+    subDialogBtn: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radius.md,
+      paddingVertical: 12,
+    },
+    subDialogBtnText: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    subDialogCancelBtn: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 10,
+    },
+    subDialogCancelText: {
+      fontSize: 14,
+      color: colors.text.muted,
     },
     rateLimitBox: {
       width: '100%',
