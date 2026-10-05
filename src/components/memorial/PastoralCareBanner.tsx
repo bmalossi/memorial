@@ -17,6 +17,7 @@ export interface PastoralCareBannerProps {
   onDismiss: () => void;
   onConfigureContact?: () => void;
   onRequestSignal?: () => void;
+  onExplicitHelp?: () => void;
   containerStyle?: ViewStyle;
 }
 
@@ -26,6 +27,7 @@ export function PastoralCareBanner({
   onDismiss,
   onConfigureContact,
   onRequestSignal,
+  onExplicitHelp,
   containerStyle,
 }: PastoralCareBannerProps) {
   const { colors, isDark } = useTheme();
@@ -130,6 +132,17 @@ export function PastoralCareBanner({
             </TouchableOpacity>
           )}
 
+          {onExplicitHelp && (
+            <TouchableOpacity
+              onPress={onExplicitHelp}
+              style={s.actionBtnSecondary}
+              activeOpacity={0.8}
+            >
+              <Feather name="message-circle" size={14} color={colors.text.primary} />
+              <Text style={s.actionBtnSecondaryText}>Preciso conversar com alguém</Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             onPress={handleCallCVV}
             style={s.actionBtnCvv}
@@ -225,6 +238,23 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       fontSize: 13,
       fontWeight: '600',
       color: colors.text.onAmber,
+    },
+    actionBtnSecondary: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: colors.bg.surface,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border.DEFAULT,
+      paddingHorizontal: spacing['3'],
+      paddingVertical: 10,
+    },
+    actionBtnSecondaryText: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.text.primary,
     },
     actionBtnCvv: {
       flexDirection: 'row',

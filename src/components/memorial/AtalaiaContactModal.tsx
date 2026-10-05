@@ -10,15 +10,22 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme, ColorTokens, typography, spacing, radius } from '../../theme';
 import { InputField, ConfirmModal } from '../ui';
-import { PastoralContact } from '../../lib/atalaiaTypes';
+import {
+  PastoralContact,
+  PastoralAlert,
+  formatAlertHistoryItem,
+} from '../../lib/atalaiaTypes';
 import {
   sendPastoralInvitation,
   resendPastoralInvitation,
   revokePastoralContact,
+  sendExplicitHelpRequest,
+  fetchPastoralAlertHistory,
 } from '../../lib/atalaiaStore';
 
 interface Props {
@@ -48,12 +55,32 @@ export function AtalaiaContactModal({
   const [revokeConfirmVisible, setRevokeConfirmVisible] = useState(false);
   const [isRevoking, setIsRevoking] = useState(false);
 
+  // Estados de Pedido Explícito de Ajuda e Histórico de Sinais (Ticket 5)
+  const [explicitHelpConfirmVisible, setExplicitHelpConfirmVisible] = useState(false);
+  const [isSendingExplicit, setIsSendingExplicit] = useState(false);
+  const [rateLimitAlertVisible, setRateLimitAlertVisible] = useState(false);
+  const [rateLimitMessage, setRateLimitMessage] = useState('');
+
+  const [alertHistory, setAlertHistory] = useState<PastoralAlert[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
   const s = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+
+  const loadHistory = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const list = await fetchPastoralAlertHistory();
+      setAlertHistory(list);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
 
   useEffect(() => {
     if (visible) {
       setErrorMessage('');
       setIsReplacing(false);
+      loadHistory();
       if (currentContact) {
         setName(currentContact.name);
         setEmail(currentContact.email);
@@ -67,6 +94,33 @@ export function AtalaiaContactModal({
       }
     }
   }, [visible, currentContact]);
+
+  const handleSendExplicitHelp = async () => {
+    setIsSendingExplicit(true);
+    try {
+      const res = await sendExplicitHelpRequest();
+      setExplicitHelpConfirmVisible(false);
+      if (res.rateLimited) {
+        setRateLimitMessage(
+          res.message ||
+            'Você já enviou um pedido de ajuda hoje. Seu contato foi notificado e pode entrar em contato a qualquer momento.'
+        );
+        setRateLimitAlertVisible(true);
+      } else if (res.success) {
+        Alert.alert(
+          'Pedido Enviado',
+          `Avisamos ${currentContact?.name || 'seu contato'} que você gostaria de conversar. Ele foi orientado a entrar em contato com brevidade.`
+        );
+        loadHistory();
+      } else {
+        Alert.alert('Erro', res.message || 'Falha ao enviar pedido de conversa.');
+      }
+    } catch (err: any) {
+      Alert.alert('Erro', err?.message || 'Erro inesperado ao solicitar conversa.');
+    } finally {
+      setIsSendingExplicit(false);
+    }
+  };
 
   const handleSendInvite = async () => {
     setErrorMessage('');
@@ -235,6 +289,38 @@ export function AtalaiaContactModal({
                 )}
               </View>
 
+              {/* Pedido Direto: Preciso conversar com alguém (Ticket 5) */}
+              {currentContact.status === 'active' && (
+                <View style={s.explicitCard}>
+                  <View style={s.explicitCardHeader}>
+                    <View style={s.explicitIconBox}>
+                      <Feather name="message-circle" size={18} color={colors.amber.DEFAULT} />
+                    </View>
+                    <View style={s.explicitTextWrap}>
+                      <Text style={s.explicitTitle}>Preciso conversar com alguém</Text>
+                      <Text style={s.explicitSubtitle}>
+                        Solicitar contato fraterno prioritário com {currentContact.name}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setExplicitHelpConfirmVisible(true)}
+                    disabled={isSendingExplicit}
+                    style={s.explicitBtn}
+                    activeOpacity={0.8}
+                  >
+                    {isSendingExplicit ? (
+                      <ActivityIndicator size="small" color={colors.text.onAmber} />
+                    ) : (
+                      <>
+                        <Feather name="send" size={15} color={colors.text.onAmber} />
+                        <Text style={s.explicitBtnText}>Solicitar Conversa Agora</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+
               {/* Ações para Contato Existente */}
               <View style={s.actionsGroup}>
                 {currentContact.status === 'pending' && (
@@ -348,6 +434,89 @@ export function AtalaiaContactModal({
               </TouchableOpacity>
             </View>
           )}
+
+          {/* Histórico Técnico de Sinais (Ticket 5) */}
+          <View style={s.historySection}>
+            <View style={s.historyHeaderRow}>
+              <View style={s.historyHeaderLeft}>
+                <Feather name="clock" size={16} color={colors.amber.DEFAULT} />
+                <Text style={s.historySectionTitle}>Histórico de Sinais</Text>
+              </View>
+              <TouchableOpacity
+                onPress={loadHistory}
+                disabled={isLoadingHistory}
+                activeOpacity={0.7}
+                style={s.historyReloadBtn}
+              >
+                {isLoadingHistory ? (
+                  <ActivityIndicator size="small" color={colors.amber.DEFAULT} />
+                ) : (
+                  <Feather name="refresh-cw" size={14} color={colors.text.muted} />
+                )}
+              </TouchableOpacity>
+            </View>
+            <Text style={s.historySectionSubtitle}>
+              Registro de transparência técnica dos avisos enviados em seu nome. Visível apenas para você.
+            </Text>
+
+            {isLoadingHistory && alertHistory.length === 0 ? (
+              <View style={s.historyLoadingBox}>
+                <ActivityIndicator size="small" color={colors.amber.DEFAULT} />
+              </View>
+            ) : alertHistory.length === 0 ? (
+              <View style={s.emptyHistoryCard}>
+                <Feather name="shield" size={18} color={colors.text.muted} />
+                <Text style={s.emptyHistoryText}>
+                  Nenhum sinal ou pedido de conversa foi enviado até o momento.
+                </Text>
+              </View>
+            ) : (
+              <View style={s.historyList}>
+                {alertHistory.map((item) => {
+                  const formatted = formatAlertHistoryItem(item);
+                  const isDelivered = formatted.deliveryStatus === 'delivered';
+                  const isFailed = formatted.deliveryStatus === 'failed';
+                  const statusColor = isDelivered
+                    ? '#7ECB98'
+                    : isFailed
+                    ? colors.error
+                    : colors.amber.DEFAULT;
+                  const isExplicit = formatted.triggerType === 'explicit_help';
+
+                  return (
+                    <View key={item.id} style={s.historyItemCard}>
+                      <View style={s.historyItemHeader}>
+                        <View style={s.historyItemTypeWrap}>
+                          <Feather
+                            name={isExplicit ? 'message-circle' : 'send'}
+                            size={14}
+                            color={isExplicit ? colors.amber.DEFAULT : colors.text.secondary}
+                          />
+                          <Text style={s.historyItemTypeTitle}>{formatted.typeLabel}</Text>
+                        </View>
+                        <View style={[s.historyStatusBadge, { borderColor: statusColor }]}>
+                          <View
+                            style={[s.historyStatusDot, { backgroundColor: statusColor }]}
+                          />
+                          <Text style={[s.historyStatusLabel, { color: statusColor }]}>
+                            {formatted.statusLabel}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={s.historyItemFooter}>
+                        <Text style={s.historyItemDateText}>{formatted.formattedDate}</Text>
+                        <View style={s.historyPrivacyWrap}>
+                          <Feather name="lock" size={11} color={colors.text.muted} />
+                          <Text style={s.historyPrivacyText}>Memórias 100% privadas</Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -363,6 +532,61 @@ export function AtalaiaContactModal({
         loading={isRevoking}
         onConfirm={handleConfirmRevoke}
       />
+
+      {/* Confirmação de Pedido Explícito de Conversa (Ticket 5) */}
+      <ConfirmModal
+        visible={explicitHelpConfirmVisible}
+        onClose={() => setExplicitHelpConfirmVisible(false)}
+        title={`Pedir Conversa com ${currentContact?.name || 'Contato'}?`}
+        message={`Seu contato pastoral receberá uma notificação prioritária avisando que você gostaria de conversar ou receber uma ligação.\n\nNenhuma palavra de suas memórias ou orações será enviada.`}
+        confirmLabel="Pedir Conversa"
+        cancelLabel="Cancelar"
+        destructive={false}
+        loading={isSendingExplicit}
+        onConfirm={handleSendExplicitHelp}
+      />
+
+      {/* Modal de Trava de 24h com Atalho para CVV 188 (Ticket 5) */}
+      <Modal
+        visible={rateLimitAlertVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setRateLimitAlertVisible(false)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.rateLimitBox}>
+            <View style={s.rateLimitIconBox}>
+              <Feather name="clock" size={24} color={colors.amber.DEFAULT} />
+            </View>
+            <Text style={s.rateLimitTitle}>Pedido Já Enviado Hoje</Text>
+            <Text style={s.rateLimitMessage}>{rateLimitMessage}</Text>
+            <Text style={s.rateLimitSubmessage}>
+              Se você estiver em um momento de aflição e precisar de apoio imediato, o CVV
+              (Centro de Valorização da Vida) oferece acolhimento gratuito 24h pelo telefone 188.
+            </Text>
+            <View style={s.rateLimitActions}>
+              <TouchableOpacity
+                onPress={() => {
+                  Linking.openURL('tel:188').catch(() => {});
+                  setRateLimitAlertVisible(false);
+                }}
+                style={s.rateLimitCvvBtn}
+                activeOpacity={0.8}
+              >
+                <Feather name="phone" size={15} color={colors.text.primary} />
+                <Text style={s.rateLimitCvvBtnText}>Ligar CVV 188</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setRateLimitAlertVisible(false)}
+                style={s.rateLimitOkBtn}
+                activeOpacity={0.8}
+              >
+                <Text style={s.rateLimitOkBtnText}>Entendi</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -609,6 +833,247 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       fontSize: 15,
       fontWeight: '600',
       color: colors.text.onAmber,
+    },
+    // Estilos do Pedido Explícito de Ajuda (Ticket 5)
+    explicitCard: {
+      backgroundColor: isDark ? '#261F18' : '#FFF9F0',
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: isDark ? '#4A3B2C' : '#F2DEB9',
+      padding: spacing['4'],
+      gap: spacing['3'],
+    },
+    explicitCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing['3'],
+    },
+    explicitIconBox: {
+      width: 38,
+      height: 38,
+      borderRadius: radius.md,
+      backgroundColor: isDark ? '#3D2F1F' : '#FCEAD2',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    explicitTextWrap: {
+      flex: 1,
+    },
+    explicitTitle: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    explicitSubtitle: {
+      fontSize: 12,
+      color: colors.text.secondary,
+      marginTop: 2,
+    },
+    explicitBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.amber.DEFAULT,
+      borderRadius: radius.md,
+      paddingVertical: 12,
+    },
+    explicitBtnText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text.onAmber,
+    },
+    // Estilos do Histórico Técnico de Sinais (Ticket 5)
+    historySection: {
+      marginTop: spacing['2'],
+      paddingTop: spacing['4'],
+      borderTopWidth: 1,
+      borderTopColor: colors.border.subtle,
+      gap: spacing['2'],
+    },
+    historyHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    historyHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing['2'],
+    },
+    historySectionTitle: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    historyReloadBtn: {
+      padding: spacing['1'],
+    },
+    historySectionSubtitle: {
+      fontSize: 12,
+      lineHeight: 16,
+      color: colors.text.muted,
+      marginBottom: spacing['2'],
+    },
+    historyLoadingBox: {
+      paddingVertical: spacing['4'],
+      alignItems: 'center',
+    },
+    emptyHistoryCard: {
+      backgroundColor: colors.bg.surface,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+      padding: spacing['4'],
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing['2'],
+    },
+    emptyHistoryText: {
+      fontSize: 13,
+      color: colors.text.muted,
+      textAlign: 'center',
+    },
+    historyList: {
+      gap: spacing['2'],
+    },
+    historyItemCard: {
+      backgroundColor: colors.bg.surface,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+      padding: spacing['3'],
+      gap: spacing['2'],
+    },
+    historyItemHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    historyItemTypeWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    historyItemTypeTitle: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    historyStatusBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      borderWidth: 1,
+      borderRadius: radius.sm,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+    },
+    historyStatusDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    historyStatusLabel: {
+      fontSize: 11,
+      fontWeight: '600',
+    },
+    historyItemFooter: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    historyItemDateText: {
+      fontSize: 12,
+      color: colors.text.muted,
+    },
+    historyPrivacyWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    historyPrivacyText: {
+      fontSize: 11,
+      color: colors.text.muted,
+    },
+    // Estilos do Modal de Cooldown / CVV 188 (Ticket 5)
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.7)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: spacing['4'],
+    },
+    rateLimitBox: {
+      width: '100%',
+      maxWidth: 400,
+      backgroundColor: colors.bg.surface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border.DEFAULT,
+      padding: spacing['5'],
+      gap: spacing['3'],
+      alignItems: 'center',
+    },
+    rateLimitIconBox: {
+      width: 48,
+      height: 48,
+      borderRadius: radius.full,
+      backgroundColor: isDark ? '#2B261D' : '#F7EBDC',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rateLimitTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.text.primary,
+      textAlign: 'center',
+      fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    },
+    rateLimitMessage: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.text.secondary,
+      textAlign: 'center',
+    },
+    rateLimitSubmessage: {
+      fontSize: 12,
+      lineHeight: 17,
+      color: colors.amber.DEFAULT,
+      textAlign: 'center',
+      backgroundColor: isDark ? '#231F19' : '#FFF9F0',
+      borderRadius: radius.sm,
+      padding: spacing['3'],
+    },
+    rateLimitActions: {
+      width: '100%',
+      gap: spacing['2'],
+      marginTop: spacing['2'],
+    },
+    rateLimitCvvBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      backgroundColor: colors.bg.raised,
+      borderRadius: radius.md,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+      paddingVertical: 12,
+    },
+    rateLimitCvvBtnText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text.primary,
+    },
+    rateLimitOkBtn: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 10,
+    },
+    rateLimitOkBtnText: {
+      fontSize: 14,
+      color: colors.text.muted,
     },
   });
 }

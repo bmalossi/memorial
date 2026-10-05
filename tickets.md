@@ -60,11 +60,11 @@ Work the **frontier**: any ticket whose blockers are all done. For a purely line
 
 **Blocked by:** Disparo do Sinal de Cuidado com Cooldown Diferenciado
 
-- [ ] Ação fixa "Preciso conversar com alguém" disponível permanentemente na tela do Atalaia e como opção secundária nos banners.
-- [ ] Diálogo de confirmação rápida antes do disparo de urgência.
-- [ ] Edge Function configurada para assunto e corpo de e-mail prioritários informando que o Leitor solicitou ativamente uma conversa ou ligação.
-- [ ] Trava de 24 horas no backend: se o Leitor clicar novamente no mesmo dia, exibe confirmação serena de que o contato já foi avisado e disponibiliza o atalho para o CVV 188.
-- [ ] Tela de histórico do Atalaia exibindo a lista de sinais enviados com data, tipo (Sinal vs Pedido Direto) e status de envio.
+- [x] Ação fixa "Preciso conversar com alguém" disponível permanentemente na tela do Atalaia e como opção secundária nos banners.
+- [x] Diálogo de confirmação rápida antes do disparo de urgência.
+- [x] Edge Function configurada para assunto e corpo de e-mail prioritários informando que o Leitor solicitou ativamente uma conversa ou ligação.
+- [x] Trava de 24 horas no backend: se o Leitor clicar novamente no mesmo dia, exibe confirmação serena de que o contato já foi avisado e disponibiliza o atalho para o CVV 188.
+- [x] Tela de histórico do Atalaia exibindo a lista de sinais enviados com data, tipo (Sinal vs Pedido Direto) e status de envio.
 
 ## Bateria Automatizada de Testes de Privacidade e Segurança
 

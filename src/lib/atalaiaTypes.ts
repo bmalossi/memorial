@@ -566,5 +566,56 @@ Sugestão de aproximação (sem transparecer qualquer alarme):
   };
 }
 
+export interface FormattedAlertHistoryItem {
+  id: string;
+  typeLabel: string;
+  statusLabel: string;
+  formattedDate: string;
+  sentAt: string;
+  deliveryStatus: string;
+  triggerType: string;
+}
+
+/**
+ * Formata os registros de alerta técnico para exibição no histórico do Leitor.
+ * INVARIANTE: Zero conteúdo de memórias ou textos íntimos.
+ */
+export function formatAlertHistoryItem(alert: PastoralAlert): FormattedAlertHistoryItem {
+  const typeLabel =
+    alert.trigger_type === 'explicit_help'
+      ? 'Pedido Direto de Ajuda'
+      : 'Sinal de Cuidado';
+
+  let statusLabel = 'Entregue';
+  if (alert.delivery_status === 'failed') {
+    statusLabel = 'Falha no Envio';
+  } else if (alert.delivery_status === 'rate_limited') {
+    statusLabel = 'Em Cooldown';
+  } else if (alert.delivery_status === 'pending') {
+    statusLabel = 'Pendente';
+  }
+
+  const d = new Date(alert.sent_at);
+  const formattedDate = !isNaN(d.getTime())
+    ? d.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : alert.sent_at;
+
+  return {
+    id: alert.id,
+    typeLabel,
+    statusLabel,
+    formattedDate,
+    sentAt: alert.sent_at,
+    deliveryStatus: alert.delivery_status,
+    triggerType: alert.trigger_type,
+  };
+}
+
+
 
 
