@@ -18,6 +18,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useTheme, typography, spacing, radius, ColorTokens } from '../../theme';
 import { supabase } from '../../lib/supabase';
+import {
+  getSavedCredentials,
+  saveCredentials,
+  clearSavedCredentials,
+} from '../../lib/authCredentialsStore';
 
 const { width: W } = Dimensions.get('window');
 
@@ -120,12 +125,13 @@ export function LoginScreen({ navigation }: Props) {
   const { colors, isDark } = useTheme();
   const s = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [showPw, setShowPw]     = useState(false);
-  const [loading, setLoading]   = useState(false);
-  const [emailErr, setEmailErr] = useState('');
-  const [pwErr, setPwErr]       = useState('');
+  const [email, setEmail]               = useState('');
+  const [password, setPassword]         = useState('');
+  const [rememberMe, setRememberMe]     = useState(false);
+  const [showPw, setShowPw]             = useState(false);
+  const [loading, setLoading]           = useState(false);
+  const [emailErr, setEmailErr]         = useState('');
+  const [pwErr, setPwErr]               = useState('');
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -135,7 +141,26 @@ export function LoginScreen({ navigation }: Props) {
       Animated.timing(fadeAnim, { toValue: 1, duration: 460, useNativeDriver: true }),
       Animated.spring(slideAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
     ]).start();
+
+    // Carrega credenciais salvas previamente no dispositivo
+    getSavedCredentials().then(({ remember, email: savedEmail, password: savedPassword }) => {
+      if (remember) {
+        setRememberMe(true);
+        if (savedEmail) setEmail(savedEmail);
+        if (savedPassword) setPassword(savedPassword);
+      }
+    });
   }, []);
+
+  const handleToggleRemember = () => {
+    setRememberMe((prev) => {
+      const next = !prev;
+      if (!next) {
+        clearSavedCredentials();
+      }
+      return next;
+    });
+  };
 
   const validate = () => {
     let ok = true;
@@ -154,8 +179,9 @@ export function LoginScreen({ navigation }: Props) {
     setPwErr('');
     setEmailErr('');
     try {
+      const cleanEmail = email.trim();
       const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: cleanEmail,
         password,
       });
 
@@ -173,6 +199,13 @@ export function LoginScreen({ navigation }: Props) {
           setPwErr('Não foi possível entrar. Verifique seus dados ou tente novamente.');
         }
         return;
+      }
+
+      // Persiste ou limpa credenciais com base na escolha do usuário
+      if (rememberMe) {
+        await saveCredentials(cleanEmail, password);
+      } else {
+        await clearSavedCredentials();
       }
     } catch (err: any) {
       setPwErr('Falha de conexão com a internet. Verifique seu sinal.');
@@ -277,15 +310,37 @@ export function LoginScreen({ navigation }: Props) {
                 error={pwErr}
               />
 
-              {/* Esqueci a senha */}
-              <TouchableOpacity
-                style={s.forgotWrap}
-                onPress={() => navigation?.navigate?.('ForgotPassword')}
-                hitSlop={{ top: 8, bottom: 8 }}
-                accessibilityRole="link"
-              >
-                <Text style={s.forgot}>Esqueci a senha?</Text>
-              </TouchableOpacity>
+              {/* Opções: Salvar Credenciais & Esqueci a Senha */}
+              <View style={s.optionsRow}>
+                <TouchableOpacity
+                  style={s.rememberWrap}
+                  onPress={handleToggleRemember}
+                  activeOpacity={0.7}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: rememberMe }}
+                  accessibilityLabel="Salvar credenciais de acesso"
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <View style={[
+                    s.checkbox,
+                    rememberMe && s.checkboxChecked,
+                  ]}>
+                    {rememberMe && (
+                      <Feather name="check" size={12} color={colors.text.onAmber} />
+                    )}
+                  </View>
+                  <Text style={s.rememberText}>Salvar credenciais</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={s.forgotWrap}
+                  onPress={() => navigation?.navigate?.('ForgotPassword')}
+                  hitSlop={{ top: 8, bottom: 8 }}
+                  accessibilityRole="link"
+                >
+                  <Text style={s.forgot}>Esqueci a senha?</Text>
+                </TouchableOpacity>
+              </View>
 
               {/* Botão Entrar */}
               <TouchableOpacity
@@ -402,9 +457,43 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       gap: spacing['5'],
     },
 
+    optionsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: -spacing['2'],
+    },
+
+    rememberWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing['2'],
+    },
+
+    checkbox: {
+      width: 18,
+      height: 18,
+      borderRadius: radius.xs,
+      borderWidth: 1.5,
+      borderColor: isDark ? colors.border.subtle : colors.border.DEFAULT,
+      backgroundColor: isDark ? colors.bg.surface : colors.bg.raised,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    checkboxChecked: {
+      backgroundColor: colors.amber.DEFAULT,
+      borderColor: colors.amber.DEFAULT,
+    },
+
+    rememberText: {
+      color: colors.text.secondary,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.medium,
+    },
+
     forgotWrap: {
-      alignSelf: 'flex-end',
-      marginTop: -spacing['3'],
+      alignSelf: 'center',
     },
 
     forgot: {
