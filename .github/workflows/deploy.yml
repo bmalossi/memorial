@@ -65,11 +65,21 @@ jobs:
       # Publica atualização Over-The-Air (OTA) silenciosa para os APKs instalados
       - name: Publicar Atualização Automática OTA (EAS Update)
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'update')
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://yqnsaslvxmqaeeccmcmg.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxbnNhc2x2eG1xYWVlY2NtY21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0NDk0NzIsImV4cCI6MjA5MDAyNTQ3Mn0.CLj0G4_2TWy1TSoUDkg_vC5ZPIB6DxGeXepwKRo73gE
+          EXPO_PUBLIC_ASSEMBLYAI_API_KEY: ba6b97fe1e144f9b879d9795ab834b56
+          EXPO_PUBLIC_TYPESAFE_API_URL: https://bibliavive.com.br/api/scripture-thread
         run: |
           npx eas-cli update --channel preview --auto --non-interactive
 
       # Compila novo instalador APK na nuvem do Expo EAS quando solicitado manualmente
       - name: Compilar Novo Instalador APK (EAS Build)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'build-apk'
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://yqnsaslvxmqaeeccmcmg.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxbnNhc2x2eG1xYWVlY2NtY21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0NDk0NzIsImV4cCI6MjA5MDAyNTQ3Mn0.CLj0G4_2TWy1TSoUDkg_vC5ZPIB6DxGeXepwKRo73gE
+          EXPO_PUBLIC_ASSEMBLYAI_API_KEY: ba6b97fe1e144f9b879d9795ab834b56
+          EXPO_PUBLIC_TYPESAFE_API_URL: https://bibliavive.com.br/api/scripture-thread
         run: |
           npx eas-cli build --platform android --profile preview --non-interactive

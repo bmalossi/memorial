@@ -12,46 +12,28 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
  * As credenciais estão no projeto Bíblia Vive (.env ou painel Supabase).
  */
 
-const supabaseUrl     = process.env.EXPO_PUBLIC_SUPABASE_URL     ?? '';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+const DEFAULT_SUPABASE_URL = 'https://yqnsaslvxmqaeeccmcmg.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxbnNhc2x2eG1xYWVlY2NtY21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0NDk0NzIsImV4cCI6MjA5MDAyNTQ3Mn0.CLj0G4_2TWy1TSoUDkg_vC5ZPIB6DxGeXepwKRo73gE';
 
-// Guarda contra crash em desenvolvimento sem .env configurado
-let supabase: SupabaseClient;
+const supabaseUrl =
+  (process.env.EXPO_PUBLIC_SUPABASE_URL && process.env.EXPO_PUBLIC_SUPABASE_URL.trim().length > 0)
+    ? process.env.EXPO_PUBLIC_SUPABASE_URL
+    : DEFAULT_SUPABASE_URL;
 
-if (supabaseUrl && supabaseAnonKey) {
-  supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      storage:           AsyncStorage,
-      autoRefreshToken:  true,
-      persistSession:    true,
-      detectSessionInUrl: false,
-    },
-  });
-} else {
-  // Mock client para desenvolvimento sem credenciais
-  // Substitua pelo cliente real ao adicionar o .env
-  console.warn(
-    '[Memorial] Supabase não configurado. ' +
-    'Crie um arquivo .env com EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY.'
-  );
-  // @ts-ignore — cliente placeholder para não crashar em dev
-  supabase = {
-    auth: {
-      signInWithPassword: async () => ({ data: null, error: new Error('Supabase não configurado') }),
-      signOut: async () => {},
-      getSession: async () => ({ data: { session: null }, error: null }),
-      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
-    },
-    from: () => ({
-      select: () => Promise.resolve({ data: [], error: null }),
-      insert: () => Promise.resolve({ data: null, error: null }),
-      update: () => Promise.resolve({ data: null, error: null }),
-      delete: () => Promise.resolve({ data: null, error: null }),
-    }),
-  } as unknown as SupabaseClient;
-}
+const supabaseAnonKey =
+  (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY && process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY.trim().length > 0)
+    ? process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+    : DEFAULT_SUPABASE_ANON_KEY;
 
-export { supabase };
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+});
 
 // ─── Tipos do banco de dados ─────────────────────────────────────────────────
 export type MemorialCategory = 'reflexao' | 'oracao' | 'testemunho' | 'jejum';

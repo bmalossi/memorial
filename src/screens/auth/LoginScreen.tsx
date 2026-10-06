@@ -110,50 +110,7 @@ const field = StyleSheet.create({
   },
 });
 
-// ─── Botão Social Circular ────────────────────────────────────────────────────
-function SocialBtn({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
-  const { colors, isDark } = useTheme();
-  const scale = useRef(new Animated.Value(1)).current;
-  return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <Pressable
-        onPress={onPress}
-        onPressIn={() =>
-          Animated.spring(scale, { toValue: 0.90, useNativeDriver: true, tension: 400, friction: 10 }).start()
-        }
-        onPressOut={() =>
-          Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 400, friction: 10 }).start()
-        }
-        style={[
-          social.btn,
-          {
-            backgroundColor: isDark ? colors.bg.surface : colors.bg.raised,
-            borderColor: colors.border.DEFAULT,
-          },
-        ]}
-        accessibilityLabel={`Entrar com ${label}`}
-        accessibilityRole="button"
-      >
-        <Text style={[social.icon, { color: colors.text.secondary }]}>{icon}</Text>
-      </Pressable>
-    </Animated.View>
-  );
-}
 
-const social = StyleSheet.create({
-  btn: {
-    width:           44,
-    height:          44,
-    borderRadius:    22,
-    borderWidth:     1,
-    alignItems:      'center',
-    justifyContent:  'center',
-  },
-  icon: {
-    fontSize:   18,
-    fontWeight: typography.weight.semibold,
-  },
-});
 
 // ─── LoginScreen ──────────────────────────────────────────────────────────────
 interface Props { navigation?: any }
@@ -208,15 +165,34 @@ export function LoginScreen({ navigation }: Props) {
           setPwErr('E-mail ou senha incorretos.');
         } else if (msg.includes('email not confirmed')) {
           setEmailErr('E-mail ainda não confirmado no Bíblia Vive.');
+        } else if (msg.includes('rate limit') || msg.includes('too many requests')) {
+          setPwErr('Muitas tentativas. Aguarde alguns instantes.');
+        } else if (msg.includes('network') || msg.includes('connection') || msg.includes('fetch')) {
+          setPwErr('Falha de conexão com a internet. Verifique seu sinal.');
         } else {
-          setPwErr(error.message);
+          setPwErr('Não foi possível entrar. Verifique seus dados ou tente novamente.');
         }
         return;
       }
     } catch (err: any) {
-      setPwErr('Falha de conexão com o servidor. Verifique sua internet.');
+      setPwErr('Falha de conexão com a internet. Verifique seu sinal.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setPwErr('');
+    setEmailErr('');
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+      });
+      if (error) {
+        setPwErr('Não foi possível iniciar o login com o Google.');
+      }
+    } catch {
+      setPwErr('Não foi possível iniciar o login com o Google.');
     }
   };
 
@@ -336,12 +312,17 @@ export function LoginScreen({ navigation }: Props) {
                 <View style={s.dividerLine} />
               </View>
 
-              {/* Social */}
-              <View style={s.socialRow}>
-                <SocialBtn icon="G"  label="Google" onPress={() => {}} />
-                <SocialBtn icon=""  label="Apple"  onPress={() => {}} />
-                <SocialBtn icon="⌥"  label="GitHub" onPress={() => {}} />
-              </View>
+              {/* Entrar com o Google */}
+              <TouchableOpacity
+                style={s.googleBtn}
+                onPress={handleGoogleLogin}
+                activeOpacity={0.8}
+                accessibilityLabel="Continuar com o Google"
+                accessibilityRole="button"
+              >
+                <Text style={s.googleIcon}>G</Text>
+                <Text style={s.googleBtnText}>Continuar com o Google</Text>
+              </TouchableOpacity>
 
               {/* Criar conta */}
               <View style={s.registerRow}>
@@ -478,10 +459,27 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       letterSpacing: 0.4,
     },
 
-    socialRow: {
-      flexDirection:  'row',
+    googleBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
       justifyContent: 'center',
-      gap:            spacing['5'],
+      gap: spacing['3'],
+      height: 48,
+      borderRadius: radius.md,
+      backgroundColor: isDark ? colors.bg.surface : colors.bg.raised,
+      borderWidth: 1,
+      borderColor: colors.border.DEFAULT,
+    },
+    googleIcon: {
+      fontSize: 16,
+      fontWeight: typography.weight.bold,
+      color: colors.amber.DEFAULT,
+      fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    },
+    googleBtnText: {
+      color: colors.text.primary,
+      fontSize: typography.size.sm,
+      fontWeight: typography.weight.medium,
     },
 
     registerRow: {
