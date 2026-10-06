@@ -22,19 +22,26 @@ import { NovoRegistroSheet } from '../../components/memorial/NovoRegistroSheet';
 import { FAB } from '../../components/ui/FAB';
 import { MemorialEntry } from '../../lib/types';
 import { MemorialCategory, supabase } from '../../lib/supabase';
+import { PastoralCareBanner } from '../../components/memorial/PastoralCareBanner';
+import { PastoralCareActionBanner } from '../../components/memorial/PastoralCareActionBanner';
+import { AtalaiaContactModal } from '../../components/memorial/AtalaiaContactModal';
+import { PastoralContact } from '../../lib/atalaiaTypes';
+import { PastoralIntent } from '../../lib/types';
+import {
+  classifyPastoralIntent,
+  shouldShowPastoralActionBanner,
+} from '../../lib/classifierJEV';
 import {
   fetchUserMemorials,
   syncMemorialsWithSupabase,
   saveUserMemorial,
   markPrayerAnsweredInSupabase,
+  updateMemorialPastoralIntent,
   subscribeToSyncState,
   SyncStateInfo,
 } from '../../lib/memorialStore';
 import { attachAiConnectionsToMemorial } from '../../lib/aiConnectionService';
 import { searchMemorialEntries, SUGGESTED_THEMES } from '../../lib/searchService';
-import { PastoralCareBanner } from '../../components/memorial/PastoralCareBanner';
-import { AtalaiaContactModal } from '../../components/memorial/AtalaiaContactModal';
-import { PastoralContact } from '../../lib/atalaiaTypes';
 import {
   fetchCurrentPastoralContact,
   evaluateCareTriage,
@@ -43,6 +50,7 @@ import {
   clearCareBannerDismissal,
   sendPastoralCareSignal,
   sendExplicitHelpRequest,
+  sendPastoralEcosystemEmail,
 } from '../../lib/atalaiaStore';
 
 type Filter = 'todos' | MemorialCategory | 'respondidas';
@@ -873,16 +881,20 @@ export function LinhasagradaScreen({ navigation }: Props) {
     cloudCount: 0,
   });
 
-  // Estado do Atalaia (Cuidado Pastoral & Triagem Discreta)
+  // Estado do Atalaia (Ecossistema dos 4 Pilares de Cuidado Pastoral)
   const [careBannerState, setCareBannerState] = useState<{
     visible: boolean;
-    mode: 'acolhimento' | 'sugestao_sinal';
+    mode: 'acolhimento' | 'sugestao_sinal' | 'ecosystem_action';
+    intent?: PastoralIntent;
+    confidence?: number;
     pastorName?: string;
     noteId?: string;
+    biblicalReference?: string;
   }>({
     visible: false,
     mode: 'acolhimento',
   });
+  const [isSendingPastoralAction, setIsSendingPastoralAction] = useState(false);
   const [atalaiaModalVisible, setAtalaiaModalVisible] = useState(false);
   const [pastoralContact, setPastoralContact] = useState<PastoralContact | null>(null);
   const [feedbackDialog, setFeedbackDialog] = useState<{
@@ -993,12 +1005,48 @@ export function LinhasagradaScreen({ navigation }: Props) {
 
   const handleMarkAnswered = async (id: string) => {
     try {
+      const now = new Date().toISOString();
       await markPrayerAnsweredInSupabase(id);
+      const target = entries.find((e) => e.id === id);
+
       setEntries((prev) =>
         prev.map((e) =>
-          e.id === id ? { ...e, is_answered: true, answered_at: new Date().toISOString() } : e
+          e.id === id ? { ...e, is_answered: true, answered_at: now } : e
         )
       );
+
+      // Ecossistema dos 4 Pilares: Marcação explícita ativa pilar ANSWERED_PRAYER
+      try {
+        const contact = await fetchCurrentPastoralContact();
+        setPastoralContact(contact);
+
+        const classification = await classifyPastoralIntent({
+          text: target?.content || '',
+          title: target?.title,
+          category: target?.category || 'oracao',
+          is_answered: true,
+          bible_ref: target?.bible_ref,
+        });
+
+        if (classification.intent) {
+          updateMemorialPastoralIntent(id, classification).catch(() => {});
+        }
+
+        if (shouldShowPastoralActionBanner(classification, contact?.status)) {
+          await clearCareBannerDismissal();
+          setCareBannerState({
+            visible: true,
+            mode: 'ecosystem_action',
+            intent: 'ANSWERED_PRAYER',
+            confidence: classification.confidence,
+            pastorName: contact?.name,
+            noteId: id,
+            biblicalReference: target?.bible_ref?.display,
+          });
+        }
+      } catch (careErr) {
+        console.warn('[Linhasagrada] Erro ao avaliar oração respondida:', careErr);
+      }
     } catch (err) {
       console.warn('Erro ao marcar oração como respondida:', err);
     }
@@ -1031,25 +1079,50 @@ export function LinhasagradaScreen({ navigation }: Props) {
           console.log('[Memorial] Análise de conexões em background concluída com aviso:', err);
         });
 
-      // Avaliação de Triagem de Cuidado Pastoral (Atalaia)
+      // Avaliação do Ecossistema Completo de Cuidado Pastoral (4 Pilares)
       try {
-        const evalText = `${saved.title ? saved.title + '\n' : ''}${saved.content || ''}`;
-        console.log('[Linhasagrada] Avaliando triagem de cuidado para o registro recém-criado...');
-        const isEligible = await evaluateCareTriage({
-          text: evalText,
-          createdAt: saved.created_at,
-          category: saved.category,
-        });
-        console.log('[Linhasagrada] Resultado da triagem pastoral:', isEligible);
+        const contact = await fetchCurrentPastoralContact();
+        setPastoralContact(contact);
 
-        if (isEligible) {
+        const classification = await classifyPastoralIntent({
+          text: saved.content,
+          title: saved.title,
+          category: saved.category,
+          is_answered: saved.is_answered,
+          bible_ref: saved.bible_ref,
+          tags: saved.tags,
+        });
+
+        console.log('[Linhasagrada] Classificação JEV (4 Pilares):', classification);
+
+        // Se houver intenção identificada, atualiza no memorialStore (cache local + nuvem)
+        if (classification.intent) {
+          updateMemorialPastoralIntent(saved.id, classification).catch((err) =>
+            console.log('[Memorial] Erro ao persistir intenção pastoral:', err)
+          );
+        }
+
+        // Regra de interface: confidence >= 0.80 E pastor_status == 'active'
+        const hasActivePastor = contact?.status === 'active';
+        if (shouldShowPastoralActionBanner(classification, contact?.status)) {
           await clearCareBannerDismissal();
-          const contact = await fetchCurrentPastoralContact();
-          setPastoralContact(contact);
           setCareBannerState({
             visible: true,
-            mode: contact?.status === 'active' ? 'sugestao_sinal' : 'acolhimento',
+            mode: 'ecosystem_action',
+            intent: classification.intent!,
+            confidence: classification.confidence,
             pastorName: contact?.name,
+            noteId: saved.id,
+            biblicalReference: classification.biblical_reference || saved.bible_ref?.display,
+          });
+        } else if (classification.intent === 'CRISIS' && !hasActivePastor) {
+          // Se for crise e não tiver pastor ativo, exibe acolhimento fraterno com opção de cadastrar
+          await clearCareBannerDismissal();
+          setCareBannerState({
+            visible: true,
+            mode: 'acolhimento',
+            intent: 'CRISIS',
+            confidence: classification.confidence,
             noteId: saved.id,
           });
         }
@@ -1075,6 +1148,73 @@ export function LinhasagradaScreen({ navigation }: Props) {
 
   const handleConfigureCareContact = () => {
     setAtalaiaModalVisible(true);
+  };
+
+  const handleSendPastoralAction = async (intent: PastoralIntent) => {
+    setIsSendingPastoralAction(true);
+    try {
+      const res = await sendPastoralEcosystemEmail({
+        type: intent,
+        noteId: careBannerState.noteId,
+        biblicalReference: careBannerState.biblicalReference,
+      });
+
+      setCareBannerState((prev) => ({ ...prev, visible: false }));
+      await dismissCareBanner();
+
+      const pastorDisplay = careBannerState.pastorName || 'seu pastor';
+
+      if (res.rateLimited) {
+        setFeedbackDialog({
+          visible: true,
+          title: 'Notificação Já Enviada Recentemente',
+          message:
+            res.message ||
+            `Um aviso recente já foi compartilhado com o Pr. ${pastorDisplay}. Respeitamos a janela pastoral.`,
+          icon: 'alert-circle',
+        });
+      } else if (res.success) {
+        let title = 'Notificação Enviada com Sucesso';
+        let message = `Seu pastor (${pastorDisplay}) foi notificado com sucesso. Nenhuma anotação pessoal foi exposta.`;
+
+        if (intent === 'CRISIS') {
+          title = 'Sinal de Cuidado Enviado';
+          message = `O Pr. ${pastorDisplay} foi avisado discretamente para orar por você e prestar amparo fraternal.`;
+        } else if (intent === 'THEOLOGICAL_QUERY') {
+          title = 'Dúvida de Estudo Enviada';
+          message = `A dúvida de estudo sobre ${careBannerState.biblicalReference || 'a passagem bíblica'} foi enviada ao Pr. ${pastorDisplay} para enriquecer sua caminhada!`;
+        } else if (intent === 'THANKSGIVING') {
+          title = 'Ação de Graças Compartilhada';
+          message = `Sua nota de vitória e gratidão a Deus foi enviada ao Pr. ${pastorDisplay} para renovar seu ministério!`;
+        } else if (intent === 'ANSWERED_PRAYER') {
+          title = 'Testemunho Compartilhado';
+          message = `O testemunho da sua oração respondida foi notificado ao Pr. ${pastorDisplay} para celebrarem juntos!`;
+        }
+
+        setFeedbackDialog({
+          visible: true,
+          title,
+          message,
+          icon: 'send',
+        });
+      } else {
+        setFeedbackDialog({
+          visible: true,
+          title: 'Não Foi Possível Enviar',
+          message: res.message || 'Houve um erro de conexão ao enviar a mensagem pastoral.',
+          icon: 'alert-circle',
+        });
+      }
+    } catch (err: any) {
+      setFeedbackDialog({
+        visible: true,
+        title: 'Erro de Envio',
+        message: err?.message || 'Falha ao despachar comunicação pastoral.',
+        icon: 'alert-circle',
+      });
+    } finally {
+      setIsSendingPastoralAction(false);
+    }
   };
 
   const handleRequestCareSignal = async () => {
@@ -1164,15 +1304,28 @@ export function LinhasagradaScreen({ navigation }: Props) {
   const ListHeader = () => (
     <View style={ls.listHeader}>
       {careBannerState.visible && (
-        <PastoralCareBanner
-          mode={careBannerState.mode}
-          pastorName={careBannerState.pastorName}
-          onDismiss={handleDismissCareBanner}
-          onConfigureContact={handleConfigureCareContact}
-          onRequestSignal={handleRequestCareSignal}
-          onExplicitHelp={handleExplicitCareHelp}
-          containerStyle={ls.bannerSpacing}
-        />
+        careBannerState.mode === 'ecosystem_action' && careBannerState.intent ? (
+          <PastoralCareActionBanner
+            intent={careBannerState.intent}
+            confidence={careBannerState.confidence || 0.9}
+            pastorName={careBannerState.pastorName || 'Pastor'}
+            biblicalReference={careBannerState.biblicalReference}
+            onSend={handleSendPastoralAction}
+            onDismiss={handleDismissCareBanner}
+            isSending={isSendingPastoralAction}
+            containerStyle={ls.bannerSpacing}
+          />
+        ) : (
+          <PastoralCareBanner
+            mode={careBannerState.mode === 'sugestao_sinal' ? 'sugestao_sinal' : 'acolhimento'}
+            pastorName={careBannerState.pastorName}
+            onDismiss={handleDismissCareBanner}
+            onConfigureContact={handleConfigureCareContact}
+            onRequestSignal={handleRequestCareSignal}
+            onExplicitHelp={handleExplicitCareHelp}
+            containerStyle={ls.bannerSpacing}
+          />
+        )
       )}
       <EbenezerCard count={entries.length} />
 

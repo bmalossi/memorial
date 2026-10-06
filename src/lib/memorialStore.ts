@@ -10,7 +10,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, MemorialCategory } from './supabase';
-import { MemorialEntry, BibleRef, AiConnection, JevCategory, SyncStatus, MOCK_ENTRIES } from './types';
+import { MemorialEntry, BibleRef, AiConnection, JevCategory, PastoralIntent, SyncStatus, MOCK_ENTRIES } from './types';
 
 const STORAGE_KEY_ENTRIES = '@memorial_cache_entries_v2';
 const STORAGE_KEY_PENDING = '@memorial_pending_queue_v2';
@@ -25,7 +25,7 @@ export interface SyncStateInfo {
 }
 
 interface PendingAction {
-  action: 'create' | 'update' | 'delete' | 'mark_answered' | 'update_ai';
+  action: 'create' | 'update' | 'delete' | 'mark_answered' | 'update_ai' | 'update_pastoral_intent';
   id: string;
   entry?: any;
   payload?: any;
@@ -144,10 +144,20 @@ export function buildSupabaseNotePayload(
     verse: verse,
     verse_id: verseId,
     tags: entry.tags || [],
+    pastoral_intent: entry.pastoral_intent || null,
+    pastoral_intent_confidence: entry.pastoral_intent_confidence || null,
+    pastoral_intent_evaluated_at: entry.pastoral_intent_evaluated_at || null,
+    pastoral_intent_reason: entry.pastoral_intent_reason || null,
+    pastoral_alert_sent_types: entry.pastoral_alert_sent_types || [],
     metadata: {
       tags: entry.tags || [],
       ai_connections: entry.ai_connections || [],
       jev_category: entry.jev_category || null,
+      pastoral_intent: entry.pastoral_intent || null,
+      pastoral_intent_confidence: entry.pastoral_intent_confidence || null,
+      pastoral_intent_evaluated_at: entry.pastoral_intent_evaluated_at || null,
+      pastoral_intent_reason: entry.pastoral_intent_reason || null,
+      pastoral_alert_sent_types: entry.pastoral_alert_sent_types || [],
       created_from: 'memorial_app',
     },
   };
@@ -192,6 +202,19 @@ export function mapSupabaseRowToEntry(row: any): MemorialEntry {
   const jev_category = row.metadata?.jev_category || undefined;
   const isAnswered = Boolean(row.answered_at) || row.status === 'answered';
 
+  const pastoralIntent = row.pastoral_intent || row.metadata?.pastoral_intent || null;
+  const pastoralConfidence =
+    row.pastoral_intent_confidence ?? row.metadata?.pastoral_intent_confidence ?? null;
+  const pastoralEvaluatedAt =
+    row.pastoral_intent_evaluated_at || row.metadata?.pastoral_intent_evaluated_at || null;
+  const pastoralReason =
+    row.pastoral_intent_reason || row.metadata?.pastoral_intent_reason || null;
+  const pastoralAlertSentTypes = Array.isArray(row.pastoral_alert_sent_types)
+    ? row.pastoral_alert_sent_types
+    : Array.isArray(row.metadata?.pastoral_alert_sent_types)
+    ? row.metadata.pastoral_alert_sent_types
+    : [];
+
   return {
     id: String(row.id),
     category: mapTypeToCategory(row.type),
@@ -204,6 +227,11 @@ export function mapSupabaseRowToEntry(row: any): MemorialEntry {
     jev_category,
     is_answered: isAnswered,
     answered_at: row.answered_at || undefined,
+    pastoral_intent: pastoralIntent,
+    pastoral_intent_confidence: pastoralConfidence,
+    pastoral_intent_evaluated_at: pastoralEvaluatedAt,
+    pastoral_intent_reason: pastoralReason,
+    pastoral_alert_sent_types: pastoralAlertSentTypes,
     created_at: row.created_at || new Date().toISOString(),
     sync_status: 'synced',
   };
@@ -407,6 +435,33 @@ async function runSyncMemorials(): Promise<{
                   jev_category: item.payload?.jevCategory || currentMeta.jev_category || null,
                   ai_status: 'done',
                   ai_evaluated_at: new Date().toISOString(),
+                },
+              })
+              .eq('id', item.id)
+              .eq('user_id', user.id);
+
+          } else if (item.action === 'update_pastoral_intent') {
+            const { data: currentNote } = await supabase
+              .from('user_notes')
+              .select('metadata')
+              .eq('id', item.id)
+              .eq('user_id', user.id)
+              .maybeSingle();
+
+            const currentMeta = (currentNote?.metadata as Record<string, any>) || {};
+            await supabase
+              .from('user_notes')
+              .update({
+                pastoral_intent: item.payload?.intent || null,
+                pastoral_intent_confidence: item.payload?.confidence || null,
+                pastoral_intent_evaluated_at: item.payload?.evaluated_at || new Date().toISOString(),
+                pastoral_intent_reason: item.payload?.reason || null,
+                metadata: {
+                  ...currentMeta,
+                  pastoral_intent: item.payload?.intent || null,
+                  pastoral_intent_confidence: item.payload?.confidence || null,
+                  pastoral_intent_evaluated_at: item.payload?.evaluated_at || new Date().toISOString(),
+                  pastoral_intent_reason: item.payload?.reason || null,
                 },
               })
               .eq('id', item.id)
@@ -698,3 +753,89 @@ export async function updateMemorialAiConnections(
     }
   }
 }
+
+/**
+ * Atualiza a classificação da intenção pastoral (4 Pilares) de um marco (Local-First).
+ */
+export async function updateMemorialPastoralIntent(
+  id: string,
+  classification: {
+    intent: PastoralIntent | null;
+    confidence: number;
+    reason?: string;
+    evaluated_at?: string;
+  }
+): Promise<void> {
+  const now = classification.evaluated_at || new Date().toISOString();
+
+  // 1. Atualiza cache local
+  const cached = await readLocalCache();
+  const updatedCache = cached.map((e) =>
+    e.id === id
+      ? {
+          ...e,
+          pastoral_intent: classification.intent,
+          pastoral_intent_confidence: classification.confidence,
+          pastoral_intent_evaluated_at: now,
+          pastoral_intent_reason: classification.reason,
+        }
+      : e
+  );
+  await writeLocalCache(updatedCache);
+
+  // 2. Enfileira pendência
+  await enqueuePendingAction({
+    action: 'update_pastoral_intent',
+    id,
+    payload: {
+      intent: classification.intent,
+      confidence: classification.confidence,
+      reason: classification.reason,
+      evaluated_at: now,
+    },
+    createdAt: now,
+  });
+
+  // 3. Envia para Supabase
+  const { data: sessionData } = await supabase.auth.getSession();
+  const user = sessionData?.session?.user;
+
+  if (user) {
+    try {
+      const { data: currentNote } = await supabase
+        .from('user_notes')
+        .select('metadata')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const currentMeta = (currentNote?.metadata as Record<string, any>) || {};
+
+      await supabase
+        .from('user_notes')
+        .update({
+          pastoral_intent: classification.intent,
+          pastoral_intent_confidence: classification.confidence,
+          pastoral_intent_evaluated_at: now,
+          pastoral_intent_reason: classification.reason,
+          metadata: {
+            ...currentMeta,
+            pastoral_intent: classification.intent,
+            pastoral_intent_confidence: classification.confidence,
+            pastoral_intent_evaluated_at: now,
+            pastoral_intent_reason: classification.reason,
+          },
+        })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      const queue = await readPendingQueue();
+      await writePendingQueue(
+        queue.filter((q) => !(q.id === id && q.action === 'update_pastoral_intent'))
+      );
+    } catch (e) {
+      console.warn('[Memorial] Erro ao sincronizar intenção pastoral:', e);
+    }
+  }
+}
+

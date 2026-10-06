@@ -8,6 +8,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+import { PastoralIntent } from './types';
 import {
   PastoralContact,
   PastoralAlert,
@@ -394,5 +395,67 @@ export async function sendExplicitHelpRequest(): Promise<{
     return { success: false, message: err?.message || 'Falha de conexão ao enviar pedido.' };
   }
 }
+
+/**
+ * Dispara uma notificação do Ecossistema Completo de Cuidado Pastoral (4 Pilares)
+ * (Edge Function send-pastoral-ecosystem-email via Resend).
+ *
+ * Pilares:
+ * - 'CRISIS': Notificação solene de cobertura pastoral e oração.
+ * - 'THEOLOGICAL_QUERY': Dúvida exegética ou passagem bíblica profunda.
+ * - 'THANKSGIVING': Nota de vitória e gratidão a Deus para alegrar o ministério.
+ * - 'ANSWERED_PRAYER': Testemunho de oração respondida e celebração comunitária.
+ */
+export async function sendPastoralEcosystemEmail(params: {
+  type: PastoralIntent;
+  noteId?: string | null;
+  biblicalReference?: string | null;
+}): Promise<{
+  success: boolean;
+  rateLimited?: boolean;
+  message?: string;
+  deliveryStatus?: string;
+}> {
+  try {
+    const { data, error } = await supabase.functions.invoke('send-pastoral-ecosystem-email', {
+      body: {
+        type: params.type,
+        note_id: params.noteId || null,
+        biblical_reference: params.biblicalReference || null,
+      },
+    });
+
+    if (error) {
+      if (error.message?.includes('rate_limited') || error.message?.includes('429')) {
+        return {
+          success: false,
+          rateLimited: true,
+          message: 'Um aviso já foi compartilhado recentemente. Respeitamos a janela pastoral.',
+        };
+      }
+      return { success: false, message: error.message };
+    }
+
+    if (data?.error === 'rate_limited') {
+      return {
+        success: false,
+        rateLimited: true,
+        message: data.message,
+      };
+    }
+
+    return {
+      success: Boolean(data?.success),
+      message: data?.message,
+      deliveryStatus: data?.delivery_status,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err?.message || 'Falha de conexão ao enviar notificação pastoral.',
+    };
+  }
+}
+
 
 

@@ -1,4 +1,4 @@
-import { MemorialCategory } from '../lib/supabase';
+export type MemorialCategory = 'reflexao' | 'oracao' | 'testemunho' | 'jejum';
 
 export interface BibleRef {
   book:    string;   // "Salmos"
@@ -57,6 +57,12 @@ export interface AiConnection {
 
 export type SyncStatus = 'synced' | 'pending' | 'local_only' | 'syncing' | 'error';
 
+export type PastoralIntent =
+  | 'CRISIS'
+  | 'THEOLOGICAL_QUERY'
+  | 'THANKSGIVING'
+  | 'ANSWERED_PRAYER';
+
 export interface MemorialEntry {
   id:              string;
   category:        MemorialCategory;
@@ -69,6 +75,11 @@ export interface MemorialEntry {
   jev_category?:   JevCategory;
   is_answered?:    boolean;   // para Orações
   answered_at?:    string;
+  pastoral_intent?: PastoralIntent | null;
+  pastoral_intent_confidence?: number | null;
+  pastoral_intent_evaluated_at?: string | null;
+  pastoral_intent_reason?: string | null;
+  pastoral_alert_sent_types?: string[];
   created_at:      string;    // ISO string
   sync_status?:    SyncStatus;
 }
