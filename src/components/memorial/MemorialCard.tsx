@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,10 @@ import {
   Pressable,
   Animated,
   TouchableOpacity,
+  Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useTheme, ColorTokens, typography, spacing } from '../../theme';
+import { useTheme, ColorTokens, typography, spacing, radius } from '../../theme';
 import { MemorialEntry } from '../../lib/types';
 import { CATEGORY_CONFIG, relativeDate, truncate } from '../../lib/utils';
 
@@ -22,32 +23,10 @@ export function MemorialCard({ entry, onPress, onAnswer }: Props) {
   const { colors, isDark } = useTheme();
   const cfg = CATEGORY_CONFIG[entry.category];
   const scale = useRef(new Animated.Value(1)).current;
-  const pulseAnim = useRef(new Animated.Value(0.4)).current;
   const answerScale = useRef(new Animated.Value(1)).current;
   const [isMarking, setIsMarking] = useState(false);
 
   const s = useMemo(() => getCardStyles(colors, isDark), [colors, isDark]);
-
-  useEffect(() => {
-    if (entry.ai_status === 'processing') {
-      const loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 0.35,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      loop.start();
-      return () => loop.stop();
-    }
-  }, [entry.ai_status]);
 
   const handlePressIn = () => {
     Animated.spring(scale, { toValue: 0.985, useNativeDriver: true, tension: 350, friction: 12 }).start();
@@ -113,34 +92,12 @@ export function MemorialCard({ entry, onPress, onAnswer }: Props) {
             ))}
           </View>
 
-          {entry.ai_status === 'processing' && (
-            <View style={s.aiStatusWrap}>
-              <Animated.View
-                style={[
-                  s.pulseDot,
-                  {
-                    opacity: pulseAnim,
-                    transform: [
-                      {
-                        scale: pulseAnim.interpolate({
-                          inputRange: [0.35, 1],
-                          outputRange: [0.85, 1.25],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              />
-              <Text style={s.aiStatusText}>Identificando conexões…</Text>
-            </View>
-          )}
-
-          {entry.ai_status === 'done' && (entry.ai_connections?.length ?? 0) > 0 && (
-            <View style={s.aiConnectionBadge}>
-              <Feather name="bookmark" size={11} color={colors.amber.DEFAULT} />
-              <Text style={s.aiConnectionText}>
-                {entry.ai_connections!.length}{' '}
-                {entry.ai_connections!.length === 1 ? 'passagem conectada' : 'passagens conectadas'}
+          {(entry.ai_connections?.length ?? 0) > 0 && (
+            <View style={s.scripturePill}>
+              <Feather name="book-open" size={11} color={colors.amber.DEFAULT} />
+              <Text style={s.scripturePillText} numberOfLines={1}>
+                {entry.ai_connections![0].reference}
+                {entry.ai_connections!.length > 1 ? ` · +${entry.ai_connections!.length - 1}` : ''}
               </Text>
             </View>
           )}
@@ -260,39 +217,23 @@ function getCardStyles(colors: ColorTokens, isDark: boolean) {
       fontSize: 11,
     },
 
-    aiStatusWrap: {
-      flexDirection: 'row',
-      alignItems:    'center',
-      gap:           6,
-    },
-
-    pulseDot: {
-      width:           6,
-      height:          6,
-      borderRadius:    3,
-      backgroundColor: colors.amber.DEFAULT,
-      opacity:         0.8,
-    },
-
-    aiStatusText: {
-      color:     colors.text.muted,
-      fontSize:  11,
-      fontStyle: 'italic',
-    },
-
-    aiConnectionBadge: {
+    scripturePill: {
       flexDirection:     'row',
       alignItems:        'center',
-      backgroundColor:   colors.amber.muted,
+      backgroundColor:   colors.bg.raised,
       paddingHorizontal: 8,
       paddingVertical:   3,
-      borderRadius:      6,
+      borderRadius:      radius.xs,
       gap:               5,
+      borderWidth:       1,
+      borderColor:       colors.border.subtle,
+      maxWidth:          180,
     },
 
-    aiConnectionText: {
-      color:      isDark ? colors.amber.light : colors.amber.DEFAULT,
+    scripturePillText: {
+      color:      colors.text.secondary,
       fontSize:   11,
+      fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
       fontWeight: typography.weight.medium,
     },
 

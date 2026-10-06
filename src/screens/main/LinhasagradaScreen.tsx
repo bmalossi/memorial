@@ -431,14 +431,11 @@ function ScreenHeader({
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onClearSearch: () => void;
-  onSyncPress: () => void;
-  syncInfo: SyncStateInfo;
+  onSyncPress?: () => void;
+  syncInfo?: SyncStateInfo;
   initial?: string;
 }) {
   const { colors } = useTheme();
-  const isSyncing = syncInfo.status === 'syncing';
-  const isSynced = syncInfo.status === 'synced';
-  const isOffline = syncInfo.status === 'offline';
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -514,48 +511,6 @@ function ScreenHeader({
         MEMORIAL
       </Text>
       <View style={header.actions}>
-        {/* Indicador e gatilho de sincronização em nuvem */}
-        <TouchableOpacity
-          onPress={onSyncPress}
-          style={[
-            header.syncBtn,
-            { backgroundColor: colors.bg.surface, borderColor: colors.border.DEFAULT },
-            isSyncing && header.syncBtnActive,
-            isSynced && header.syncBtnSynced,
-          ]}
-          disabled={isSyncing}
-          activeOpacity={0.7}
-          accessibilityLabel="Sincronizar com a nuvem"
-          accessibilityRole="button"
-        >
-          {isSyncing ? (
-            <ActivityIndicator size="small" color={colors.amber.DEFAULT} style={{ transform: [{ scale: 0.7 }] }} />
-          ) : isSynced ? (
-            <Feather name="cloud" size={13} color={colors.amber.DEFAULT} />
-          ) : isOffline ? (
-            <Feather name="cloud-off" size={13} color={colors.text.muted} />
-          ) : (
-            <Feather name="cloud" size={13} color={colors.text.muted} />
-          )}
-
-          <Text
-            style={[
-              header.syncText,
-              { color: colors.text.muted },
-              isSynced && { color: colors.amber.DEFAULT },
-              isSyncing && { color: colors.amber.DEFAULT },
-            ]}
-          >
-            {isSyncing
-              ? 'Sincronizando'
-              : isSynced
-              ? 'Nuvem ativa'
-              : syncInfo.pendingCount > 0
-              ? `${syncInfo.pendingCount} pendente`
-              : 'Local'}
-          </Text>
-        </TouchableOpacity>
-
         <TouchableOpacity
           onPress={onToggleSearch}
           style={[header.iconBtn, { backgroundColor: colors.bg.surface, borderColor: colors.border.DEFAULT }]}
@@ -654,30 +609,6 @@ const header = StyleSheet.create({
     flexDirection: 'row',
     alignItems:    'center',
     gap:           spacing['2'],
-  },
-  syncBtn: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    gap:             5,
-    paddingHorizontal: 8,
-    height:          32,
-    borderRadius:    radius.sm,
-    backgroundColor: colors.bg.surface,
-    borderWidth:     1,
-    borderColor:     colors.border.DEFAULT,
-  },
-  syncBtnActive: {
-    borderColor: colors.amber.DEFAULT,
-  },
-  syncBtnSynced: {
-    borderColor: 'rgba(217, 180, 99, 0.35)',
-    backgroundColor: 'rgba(217, 180, 99, 0.06)',
-  },
-  syncText: {
-    color:      colors.text.muted,
-    fontSize:   10,
-    fontWeight: typography.weight.medium,
-    letterSpacing: 0.3,
   },
   iconBtn: {
     width:           36,

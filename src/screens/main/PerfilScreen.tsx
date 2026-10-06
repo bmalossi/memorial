@@ -639,9 +639,29 @@ export function PerfilScreen({ navigation }: Props) {
                   </Text>
                 </View>
               </View>
-              <View style={[s.badgeActive, notifSettings.enabled && s.badgePushActive]}>
-                <Text style={[s.badgeActiveText, notifSettings.enabled && s.badgePushActiveText]}>
-                  {notifSettings.pushTokenRegistered ? 'CONECTADO' : notifSettings.enabled ? 'ATIVO' : 'DESLIGADO'}
+              <View style={s.statusPill}>
+                <View
+                  style={[
+                    s.statusDot,
+                    {
+                      backgroundColor:
+                        notifSettings.pushTokenRegistered || notifSettings.enabled
+                          ? colors.amber.DEFAULT
+                          : colors.text.muted,
+                    },
+                  ]}
+                />
+                <Text
+                  style={[
+                    s.statusText,
+                    (notifSettings.pushTokenRegistered || notifSettings.enabled) && s.statusTextActive,
+                  ]}
+                >
+                  {notifSettings.pushTokenRegistered
+                    ? 'Conectado'
+                    : notifSettings.enabled
+                    ? 'Ativo'
+                    : 'Inativo'}
                 </Text>
               </View>
             </View>
@@ -664,10 +684,10 @@ export function PerfilScreen({ navigation }: Props) {
                   size={16}
                   color={
                     pastoralContact?.status === 'active'
-                      ? '#7ECB98'
-                      : pastoralContact?.status === 'pending'
                       ? colors.amber.DEFAULT
-                      : colors.text.secondary
+                      : pastoralContact?.status === 'pending'
+                      ? colors.text.secondary
+                      : colors.text.muted
                   }
                 />
                 <View style={s.rowTextCol}>
@@ -689,16 +709,14 @@ export function PerfilScreen({ navigation }: Props) {
               </View>
               <View style={s.rowRightWrap}>
                 {pastoralContact?.status === 'active' ? (
-                  <View style={[s.badgeActive, { backgroundColor: isDark ? '#1B2E1E' : '#E8F5E9' }]}>
-                    <Text style={[s.badgeActiveText, { color: '#7ECB98' }]}>
-                      ATIVO
-                    </Text>
+                  <View style={s.statusPill}>
+                    <View style={[s.statusDot, { backgroundColor: colors.amber.DEFAULT }]} />
+                    <Text style={[s.statusText, s.statusTextActive]}>Ativo</Text>
                   </View>
                 ) : pastoralContact?.status === 'pending' ? (
-                  <View style={[s.badgeActive, s.badgePushActive]}>
-                    <Text style={[s.badgeActiveText, s.badgePushActiveText]}>
-                      PENDENTE
-                    </Text>
+                  <View style={s.statusPill}>
+                    <View style={[s.statusDot, { backgroundColor: colors.text.muted }]} />
+                    <Text style={s.statusText}>Pendente</Text>
                   </View>
                 ) : null}
                 <Feather name="chevron-right" size={16} color={colors.text.muted} />
@@ -1226,28 +1244,30 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       fontSize: 11,
       marginTop: 2,
     },
-    badgeActive: {
-      paddingHorizontal: 9,
-      paddingVertical: 4,
-      borderRadius: radius.xs,
-      backgroundColor: colors.bg.raised,
-      borderWidth: 1,
-      borderColor: colors.border.DEFAULT,
+    statusPill: {
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
+      gap: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: radius.full,
+      backgroundColor: colors.bg.surface,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
     },
-    badgeActiveText: {
+    statusDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.text.muted,
+    },
+    statusText: {
       color: colors.text.muted,
-      fontSize: 10,
-      fontWeight: typography.weight.bold,
-      letterSpacing: 0.8,
+      fontSize: 12,
+      fontWeight: typography.weight.medium,
     },
-    badgePushActive: {
-      backgroundColor: isDark ? 'rgba(217, 180, 99, 0.12)' : 'rgba(184, 126, 40, 0.10)',
-      borderColor: colors.amber.DEFAULT,
-    },
-    badgePushActiveText: {
-      color: colors.amber.DEFAULT,
+    statusTextActive: {
+      color: colors.text.secondary,
     },
     syncStatsRow: {
       flexDirection: 'row',

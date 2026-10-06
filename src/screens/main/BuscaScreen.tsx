@@ -273,6 +273,7 @@ export function BuscaScreen({ navigation }: Props) {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={s.chipsScrollView}
           contentContainerStyle={s.chipsRow}
         >
           <TouchableOpacity
@@ -553,17 +554,24 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
     color: colors.amber.DEFAULT,
     fontWeight: typography.weight.bold,
   },
+  chipsScrollView: {
+    flexGrow: 0,
+    flexShrink: 0,
+    height: 50,
+  },
   chipsRow: {
     paddingHorizontal: spacing['5'],
-    paddingVertical: spacing['3'],
+    alignItems: 'center',
     gap: spacing['2'],
+    height: 50,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    height: 34,
     borderRadius: radius.full,
     backgroundColor: colors.bg.surface,
     borderWidth: 1,
@@ -575,7 +583,8 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
   },
   filterChipText: {
     color: colors.text.muted,
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: typography.weight.medium,
   },
   filterChipTextActive: {
     color: colors.amber.DEFAULT,
@@ -654,6 +663,7 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
     fontStyle: 'italic',
   },
   emptyContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing['8'],
