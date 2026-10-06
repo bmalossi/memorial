@@ -2,15 +2,14 @@
  * voiceTranscriptionService.ts — Bíblia Vive / Memorial
  *
  * Módulo de gravação e transcrição de voz em alta fidelidade.
- * Integração canônica com AssemblyAI (Universal-3.5-pro / Universal-2) em pt-BR.
+ * Arquitetura blindada: Zero credenciais no cliente móvel.
+ * - Armazenamento de áudio direto via Cloudflare R2 (presigned PUT)
+ * - Processamento seguro via Backend Proxy STT (Bíblia Vive / AssemblyAI Universal-2 pt-BR)
  */
 
-import { Platform } from 'react-native';
-
-const ASSEMBLYAI_API_KEY =
-  process.env.EXPO_PUBLIC_ASSEMBLYAI_API_KEY ||
-  process.env.ASSEMBLYAI_API_KEY ||
-  '';
+const STT_API_URL =
+  process.env.EXPO_PUBLIC_STT_API_URL ||
+  'https://www.bibliavive.com.br/api/stt';
 
 export interface TranscriptionProgress {
   status: 'uploading' | 'transcribing' | 'completed' | 'error';
@@ -45,72 +44,51 @@ async function inspectAudioFile(uri: string): Promise<{ exists: boolean; size: n
 }
 
 /**
- * Realiza o upload binário resiliente do arquivo de áudio para a AssemblyAI.
- * Utiliza 4 estratégias em cascata para compatibilidade universal entre Expo SDKs e ambientes nativos.
+ * Realiza o upload binário do arquivo de áudio para o Cloudflare R2 via Presigned PUT URL.
+ * Suporta 4 estratégias em cascata para compatibilidade universal entre Expo SDKs e ambientes nativos.
  */
-async function uploadAudioBinary(audioUri: string, apiKey: string): Promise<string> {
-  const uploadEndpoint = 'https://api.assemblyai.com/v2/upload';
+async function uploadToR2(audioUri: string, uploadUrl: string): Promise<boolean> {
+  const isM4a = audioUri.toLowerCase().includes('.m4a');
+  const contentType = isM4a ? 'audio/mp4' : 'audio/webm';
 
   // ─── ESTRATÉGIA 1: expo-file-system/legacy uploadAsync (Streaming nativo de disco) ───
   try {
     const FileSystemLegacy = require('expo-file-system/legacy');
     if (FileSystemLegacy && typeof FileSystemLegacy.uploadAsync === 'function') {
-      console.log('[Memorial Voice] Tentando upload via expo-file-system/legacy...');
-      const uploadRes = await FileSystemLegacy.uploadAsync(
-        uploadEndpoint,
-        audioUri,
-        {
-          httpMethod: 'POST',
-          uploadType: FileSystemLegacy.FileSystemUploadType.BINARY_CONTENT,
-          headers: {
-            Authorization: apiKey,
-            'Content-Type': 'application/octet-stream',
-          },
-        }
-      );
+      const uploadRes = await FileSystemLegacy.uploadAsync(uploadUrl, audioUri, {
+        httpMethod: 'PUT',
+        uploadType: FileSystemLegacy.FileSystemUploadType.BINARY_CONTENT,
+        headers: {
+          'Content-Type': contentType,
+        },
+      });
 
-      if (uploadRes.status === 200 && uploadRes.body) {
-        const parsed = JSON.parse(uploadRes.body);
-        if (parsed.upload_url) {
-          console.log('[Memorial Voice] Upload OK (legacy FileSystem):', parsed.upload_url);
-          return parsed.upload_url;
-        }
-      } else {
-        console.warn('[Memorial Voice] legacy uploadAsync status:', uploadRes.status);
+      if (uploadRes.status >= 200 && uploadRes.status < 300) {
+        return true;
       }
     }
-  } catch (err) {
-    console.log('[Memorial Voice] Falha na estratégia 1 (legacy):', err);
-  }
+  } catch {}
 
   // ─── ESTRATÉGIA 2: modern expo-file-system File.upload ───
   try {
     const { File, UploadType } = require('expo-file-system');
     if (File) {
-      console.log('[Memorial Voice] Tentando upload via modern File class...');
       const file = new File(audioUri);
       if (typeof file.upload === 'function') {
-        const uploadRes = await file.upload(uploadEndpoint, {
-          httpMethod: 'POST',
+        const uploadRes = await file.upload(uploadUrl, {
+          httpMethod: 'PUT',
           uploadType: UploadType.BINARY_CONTENT,
           headers: {
-            Authorization: apiKey,
-            'Content-Type': 'application/octet-stream',
+            'Content-Type': contentType,
           },
         });
 
-        if (uploadRes.status === 200 && uploadRes.body) {
-          const parsed = JSON.parse(uploadRes.body);
-          if (parsed.upload_url) {
-            console.log('[Memorial Voice] Upload OK (modern File):', parsed.upload_url);
-            return parsed.upload_url;
-          }
+        if (uploadRes.status >= 200 && uploadRes.status < 300) {
+          return true;
         }
       }
     }
-  } catch (err) {
-    console.log('[Memorial Voice] Falha na estratégia 2 (modern File):', err);
-  }
+  } catch {}
 
   // ─── ESTRATÉGIA 3: file.bytes() Uint8Array streaming via fetch ───
   try {
@@ -118,37 +96,28 @@ async function uploadAudioBinary(audioUri: string, apiKey: string): Promise<stri
     if (File) {
       const file = new File(audioUri);
       if (typeof file.bytes === 'function') {
-        console.log('[Memorial Voice] Lendo bytes via file.bytes()...');
         const bytes = await file.bytes();
         if (bytes && bytes.length > 50) {
-          const res = await fetch(uploadEndpoint, {
-            method: 'POST',
+          const res = await fetch(uploadUrl, {
+            method: 'PUT',
             headers: {
-              Authorization: apiKey,
-              'Content-Type': 'application/octet-stream',
+              'Content-Type': contentType,
             },
             body: bytes,
           });
 
           if (res.ok) {
-            const data = await res.json();
-            if (data.upload_url) {
-              console.log('[Memorial Voice] Upload OK (bytes):', data.upload_url);
-              return data.upload_url;
-            }
+            return true;
           }
         }
       }
     }
-  } catch (err) {
-    console.log('[Memorial Voice] Falha na estratégia 3 (bytes):', err);
-  }
+  } catch {}
 
-  // ─── ESTRATÉGIA 4: Base64 via expo-file-system/legacy convertido para Uint8Array ───
+  // ─── ESTRATÉGIA 4: Base64 via legacy FileSystem convertido para Uint8Array ───
   try {
     const FileSystemLegacy = require('expo-file-system/legacy');
     if (FileSystemLegacy && typeof FileSystemLegacy.readAsStringAsync === 'function') {
-      console.log('[Memorial Voice] Lendo base64 via legacy FileSystem...');
       const b64 = await FileSystemLegacy.readAsStringAsync(audioUri, {
         encoding: FileSystemLegacy.EncodingType.Base64,
       });
@@ -161,121 +130,157 @@ async function uploadAudioBinary(audioUri: string, apiKey: string): Promise<stri
           bytes[i] = binStr.charCodeAt(i);
         }
 
-        const res = await fetch(uploadEndpoint, {
-          method: 'POST',
+        const res = await fetch(uploadUrl, {
+          method: 'PUT',
           headers: {
-            Authorization: apiKey,
-            'Content-Type': 'application/octet-stream',
+            'Content-Type': contentType,
           },
           body: bytes,
         });
 
         if (res.ok) {
-          const data = await res.json();
-          if (data.upload_url) {
-            console.log('[Memorial Voice] Upload OK (base64 bytes):', data.upload_url);
-            return data.upload_url;
+          return true;
+        }
+      }
+    }
+  } catch {}
+
+  return false;
+}
+
+/**
+ * Fallback de contingência: Envia áudio binário diretamente para a rota proxy /api/stt.
+ */
+async function uploadDirectToSTT(audioUri: string, endpoint: string): Promise<string> {
+  const isM4a = audioUri.toLowerCase().includes('.m4a');
+  const contentType = isM4a ? 'audio/mp4' : 'audio/webm';
+
+  // Tentativa 1: legacy uploadAsync POST
+  try {
+    const FileSystemLegacy = require('expo-file-system/legacy');
+    if (FileSystemLegacy && typeof FileSystemLegacy.uploadAsync === 'function') {
+      const res = await FileSystemLegacy.uploadAsync(endpoint, audioUri, {
+        httpMethod: 'POST',
+        uploadType: FileSystemLegacy.FileSystemUploadType.BINARY_CONTENT,
+        headers: { 'Content-Type': contentType },
+      });
+      if (res.status >= 200 && res.status < 300 && res.body) {
+        const data = JSON.parse(res.body);
+        if (data.id) return data.id;
+      }
+    }
+  } catch {}
+
+  // Tentativa 2: file.bytes() -> fetch POST
+  try {
+    const { File } = require('expo-file-system');
+    if (File) {
+      const file = new File(audioUri);
+      if (typeof file.bytes === 'function') {
+        const bytes = await file.bytes();
+        if (bytes && bytes.length > 50) {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': contentType },
+            body: bytes,
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.id) return data.id;
           }
         }
       }
     }
-  } catch (err) {
-    console.log('[Memorial Voice] Falha na estratégia 4 (base64):', err);
-  }
+  } catch {}
 
-  throw new Error('Não foi possível enviar o arquivo de áudio gravado para a AssemblyAI.');
+  throw new Error('Não foi possível enviar o áudio gravado para o serviço de transcrição.');
 }
 
 /**
- * Faz o upload de um arquivo de áudio (URI ou URL remota) para a AssemblyAI e aguarda a transcrição.
+ * Faz o upload de um arquivo de áudio para o Cloudflare R2 e processa transcrição segura.
  */
 export async function transcribeAudioUri(
   audioUri: string,
   onProgress?: (p: TranscriptionProgress) => void
 ): Promise<string> {
-  const apiKey = ASSEMBLYAI_API_KEY.trim();
-  if (!apiKey) {
-    throw new Error('Chave da AssemblyAI (EXPO_PUBLIC_ASSEMBLYAI_API_KEY) não configurada.');
-  }
-
   try {
     onProgress?.({
       status: 'uploading',
       message: 'Enviando áudio com fidelidade...',
     });
 
-    let uploadUrl = '';
+    let transcriptId: string | null = null;
 
-    // Se o áudio já for uma URL remota (ex: teste/demonstração), usa diretamente
+    // Se o áudio já for uma URL remota pública
     if (audioUri.startsWith('http://') || audioUri.startsWith('https://')) {
-      uploadUrl = audioUri;
+      const submitRes = await fetch(STT_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audioUrl: audioUri }),
+      });
+      if (submitRes.ok) {
+        const submitData = await submitRes.json();
+        transcriptId = submitData.id || null;
+      }
     } else {
-      // Inspeciona o arquivo local antes de tentar upload
+      // Inspeciona o arquivo local antes do upload
       let fileInfo = await inspectAudioFile(audioUri);
-      console.log('[Memorial Voice] Verificação do arquivo de áudio:', fileInfo);
-
       if (!fileInfo.exists || fileInfo.size < 200) {
-        // Aguarda 300ms caso o sistema de arquivos do Android ainda esteja finalizando o arquivo
         await new Promise((r) => setTimeout(r, 300));
         fileInfo = await inspectAudioFile(audioUri);
-        console.log('[Memorial Voice] Re-verificação após espera:', fileInfo);
       }
 
       if (!fileInfo.exists || fileInfo.size < 200) {
         throw new Error('O microfone não capturou áudio suficiente ou o arquivo está vazio. Fale mais próximo ao aparelho.');
       }
 
-      uploadUrl = await uploadAudioBinary(audioUri, apiKey);
+      // Caminho Primário: Cloudflare R2 Presigned PUT
+      try {
+        const urlRes = await fetch(`${STT_API_URL}?action=upload-url`);
+        if (urlRes.ok) {
+          const { uploadUrl, audioUrl } = await urlRes.json();
+          if (uploadUrl && audioUrl) {
+            const r2Uploaded = await uploadToR2(audioUri, uploadUrl);
+            if (r2Uploaded) {
+              const submitRes = await fetch(STT_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ audioUrl }),
+              });
+              if (submitRes.ok) {
+                const submitData = await submitRes.json();
+                transcriptId = submitData.id || null;
+              }
+            }
+          }
+        }
+      } catch (r2Err) {
+        console.warn('[Memorial Voice] Falha ao enviar para R2 presigned, usando contingência direta:', r2Err);
+      }
+
+      // Caminho de Contingência: Upload direto ao STT proxy
+      if (!transcriptId) {
+        transcriptId = await uploadDirectToSTT(audioUri, STT_API_URL);
+      }
     }
 
-    if (!uploadUrl) {
-      throw new Error('AssemblyAI não retornou URL de upload válida.');
+    if (!transcriptId) {
+      throw new Error('O serviço de transcrição não retornou um identificador de processamento válido.');
     }
 
-    // ─── Submissão do job de transcrição (POST /v2/transcript) ───
+    // ─── Polling do status da transcrição ───
     onProgress?.({
       status: 'transcribing',
       message: 'Transcrevendo relato em português...',
     });
 
-    const transcriptRes = await fetch('https://api.assemblyai.com/v2/transcript', {
-      method: 'POST',
-      headers: {
-        Authorization: apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        audio_url: uploadUrl,
-        speech_models: ['universal-3-5-pro', 'universal-2'],
-        language_code: 'pt',
-        punctuate: true,
-        format_text: true,
-      }),
-    });
-
-    if (!transcriptRes.ok) {
-      const errText = await transcriptRes.text().catch(() => '');
-      throw new Error(`Falha ao iniciar transcrição (${transcriptRes.status}): ${errText}`);
-    }
-
-    const transcriptData = await transcriptRes.json();
-    const transcriptId = transcriptData.id;
-
-    if (!transcriptId) {
-      throw new Error('AssemblyAI não retornou ID de transcrição.');
-    }
-
-    // ─── Polling do status até "completed" ou "error" (máx 30 segundos) ───
     const startTime = Date.now();
-    const maxWaitMs = 30000;
+    const maxWaitMs = 35000;
 
     while (Date.now() - startTime < maxWaitMs) {
       await new Promise((r) => setTimeout(r, 1000));
 
-      const pollRes = await fetch(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, {
-        headers: { Authorization: apiKey },
-      });
-
+      const pollRes = await fetch(`${STT_API_URL}?id=${encodeURIComponent(transcriptId)}`);
       if (!pollRes.ok) {
         continue;
       }
@@ -295,7 +300,7 @@ export async function transcribeAudioUri(
       }
 
       if (pollData.status === 'error') {
-        throw new Error(pollData.error || 'Erro desconhecido na transcrição da AssemblyAI.');
+        throw new Error(pollData.error || 'Erro durante o processamento da transcrição.');
       }
     }
 
@@ -308,4 +313,3 @@ export async function transcribeAudioUri(
     throw err;
   }
 }
-

@@ -14,9 +14,9 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_ASSEMBLYAI_API_KEY": "${EXPO_PUBLIC_ASSEMBLYAI_API_KEY}",
         "EXPO_PUBLIC_SUPABASE_URL": "${EXPO_PUBLIC_SUPABASE_URL}",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "${EXPO_PUBLIC_SUPABASE_ANON_KEY}"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "${EXPO_PUBLIC_SUPABASE_ANON_KEY}",
+        "EXPO_PUBLIC_STT_API_URL": "${EXPO_PUBLIC_STT_API_URL}"
       }
     },
     "preview": {
@@ -28,7 +28,7 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://yqnsaslvxmqaeeccmcmg.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxbnNhc2x2eG1xYWVlY2NtY21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0NDk0NzIsImV4cCI6MjA5MDAyNTQ3Mn0.CLj0G4_2TWy1TSoUDkg_vC5ZPIB6DxGeXepwKRo73gE",
-        "EXPO_PUBLIC_ASSEMBLYAI_API_KEY": "ba6b97fe1e144f9b879d9795ab834b56",
+        "EXPO_PUBLIC_STT_API_URL": "https://www.bibliavive.com.br/api/stt",
         "EXPO_PUBLIC_TYPESAFE_API_URL": "https://bibliavive.com.br/api/scripture-thread"
       }
     },
@@ -40,7 +40,7 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://yqnsaslvxmqaeeccmcmg.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxbnNhc2x2eG1xYWVlY2NtY21nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0NDk0NzIsImV4cCI6MjA5MDAyNTQ3Mn0.CLj0G4_2TWy1TSoUDkg_vC5ZPIB6DxGeXepwKRo73gE",
-        "EXPO_PUBLIC_ASSEMBLYAI_API_KEY": "ba6b97fe1e144f9b879d9795ab834b56",
+        "EXPO_PUBLIC_STT_API_URL": "https://www.bibliavive.com.br/api/stt",
         "EXPO_PUBLIC_TYPESAFE_API_URL": "https://bibliavive.com.br/api/scripture-thread"
       }
     }

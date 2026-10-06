@@ -125,14 +125,14 @@ Crie um arquivo `.env` na raiz do projeto contendo as credenciais do Supabase e 
 EXPO_PUBLIC_SUPABASE_URL=https://<seu-projeto>.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=<sua-anon-key>
 
-# AssemblyAI (Transcrição de áudio em pt-BR)
-EXPO_PUBLIC_ASSEMBLYAI_API_KEY=<sua-chave-assemblyai>
+# Backend de Voz / STT (Cloudflare R2 + AssemblyAI no servidor)
+EXPO_PUBLIC_STT_API_URL=https://www.bibliavive.com.br/api/stt
 
 # TypeSafe JEV (Classificação tipológica bíblica)
 EXPO_PUBLIC_TYPESAFE_API_URL=https://www.bibliavive.com.br/api/scripture-thread
 ```
 
-> **Nota de Segurança:** As chaves secretas de IA (`OPENAI_API_KEY`) e e-mail (`RESEND_API_KEY`) residem **exclusivamente nos Secrets do servidor Supabase**, garantindo que nenhuma credencial confidencial seja exposta no bundle do aplicativo.
+> **Nota de Segurança:** As chaves secretas de IA (`OPENAI_API_KEY`, `ASSEMBLYAI_API_KEY`), armazenamento (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`) e e-mail (`RESEND_API_KEY`) residem **exclusivamente nos servidores Cloudflare e Supabase**, garantindo que nenhuma credencial confidencial seja exposta no bundle do aplicativo ou no cliente móvel.
 
 ### 3. Execução em Desenvolvimento
 ```bash
