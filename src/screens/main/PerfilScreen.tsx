@@ -39,6 +39,7 @@ import {
 import { AtalaiaContactModal } from '../../components/memorial/AtalaiaContactModal';
 import { PastoralContact } from '../../lib/atalaiaTypes';
 import { fetchCurrentPastoralContact } from '../../lib/atalaiaStore';
+import appConfig from '../../../app.json';
 
 interface Props {
   navigation?: any;
@@ -852,7 +853,9 @@ export function PerfilScreen({ navigation }: Props) {
         {/* ── Assinatura de Versão ── */}
         <View style={s.footerInfo}>
           <Text style={s.footerAppTitle}>MEMORIAL · APP DE MARCOS ESPIRITUAIS</Text>
-          <Text style={s.footerVersion}>Versão 1.0.0 · Integrado ao Bíblia Vive</Text>
+          <Text style={s.footerVersion}>
+            Versão {appConfig.expo?.version || '1.0.0'} (Build {appConfig.expo?.android?.versionCode || 1}) · Integrado ao Bíblia Vive
+          </Text>
         </View>
       </ScrollView>
 

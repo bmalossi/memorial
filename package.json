@@ -46,7 +46,12 @@
     "prebuild": "expo prebuild",
     "build:dev:android": "npx eas-cli build --profile development --platform android",
     "build:apk": "npx eas-cli build --profile preview --platform android",
-    "postinstall": "node scripts/patch-expo-notifications.js"
+    "postinstall": "node scripts/patch-expo-notifications.js",
+    "test": "npx tsx --test tests/atalaiaAlerts.test.ts tests/atalaiaContracts.test.ts tests/atalaiaHistory.test.ts tests/atalaiaInvitation.test.ts tests/atalaiaSecurityInvariants.test.ts tests/atalaiaTriage.test.ts tests/authCredentialsStore.test.ts tests/pastoralEcosystem4Pilares.test.ts tests/voiceTranscriptionService.test.ts",
+    "bump:build": "node scripts/bump-version.js build",
+    "bump:patch": "node scripts/bump-version.js patch",
+    "bump:minor": "node scripts/bump-version.js minor",
+    "bump:major": "node scripts/bump-version.js major"
   },
   "private": true
 }
