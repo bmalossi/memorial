@@ -1132,15 +1132,17 @@ export function LinhasagradaScreen({ navigation }: Props) {
         setFeedbackDialog({
           visible: true,
           title: 'Não Foi Possível Enviar',
-          message: res.message || 'Houve um erro de conexão ao enviar a mensagem pastoral.',
+          message:
+            res.message ||
+            'Não foi possível enviar a mensagem no momento. Tente novamente mais tarde.',
           icon: 'alert-circle',
         });
       }
-    } catch (err: any) {
+    } catch (_err: any) {
       setFeedbackDialog({
         visible: true,
-        title: 'Erro de Envio',
-        message: err?.message || 'Falha ao despachar comunicação pastoral.',
+        title: 'Não Foi Possível Enviar',
+        message: 'Não foi possível enviar a notificação no momento. Tente novamente mais tarde.',
         icon: 'alert-circle',
       });
     } finally {
@@ -1176,15 +1178,15 @@ export function LinhasagradaScreen({ navigation }: Props) {
           title: 'Não Foi Possível Enviar',
           message:
             res.message ||
-            'Houve um erro de conexão ao enviar o sinal pastoral. Tente novamente mais tarde.',
+            'Não foi possível enviar o sinal no momento. Tente novamente mais tarde.',
           icon: 'alert-circle',
         });
       }
-    } catch (err: any) {
+    } catch (_err: any) {
       setFeedbackDialog({
         visible: true,
-        title: 'Erro de Envio',
-        message: err?.message || 'Falha ao despachar sinal de cuidado pastoral.',
+        title: 'Não Foi Possível Enviar',
+        message: 'Não foi possível enviar o sinal no momento. Tente novamente mais tarde.',
         icon: 'alert-circle',
       });
     }
@@ -1218,15 +1220,15 @@ export function LinhasagradaScreen({ navigation }: Props) {
           title: 'Não Foi Possível Enviar',
           message:
             res.message ||
-            'Houve um erro de conexão ao enviar o pedido de amparo.',
+            'Não foi possível enviar o pedido de amparo no momento. Tente novamente mais tarde.',
           icon: 'alert-circle',
         });
       }
-    } catch (err: any) {
+    } catch (_err: any) {
       setFeedbackDialog({
         visible: true,
-        title: 'Erro de Envio',
-        message: err?.message || 'Falha ao despachar pedido pastoral.',
+        title: 'Não Foi Possível Enviar',
+        message: 'Não foi possível enviar o pedido no momento. Tente novamente mais tarde.',
         icon: 'alert-circle',
       });
     }

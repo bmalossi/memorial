@@ -317,6 +317,59 @@ export async function evaluateCareTriage(entry: {
 
 /**
  * Dispara um Sinal de Cuidado consentido para o pastor (Edge Function send-pastoral-alert).
+/**
+ * Extrai e higieniza mensagens de resposta das Edge Functions,
+ * garantindo que detalhes técnicos internos (como códigos de status, nomes de função ou traces)
+ * nunca sejam exibidos ao usuário final.
+ */
+async function extractPastoralErrorMessage(
+  error: any,
+  defaultMessage: string
+): Promise<{ rateLimited: boolean; message: string }> {
+  let bodyData: any = null;
+  try {
+    if (error && typeof error === 'object' && 'context' in error && typeof error.context?.json === 'function') {
+      bodyData = await error.context.json();
+    }
+  } catch {
+    // context indisponível ou resposta não JSON
+  }
+
+  if (bodyData?.error === 'rate_limited' || error?.message?.includes('rate_limited') || error?.message?.includes('429')) {
+    return {
+      rateLimited: true,
+      message: bodyData?.message || 'Um aviso já foi compartilhado recentemente. Respeitamos a janela pastoral.',
+    };
+  }
+
+  if (bodyData?.error === 'no_active_contact') {
+    return {
+      rateLimited: false,
+      message: 'Você ainda não possui um pastor ativo cadastrado para receber notificações.',
+    };
+  }
+
+  // Se o servidor retornou uma mensagem clara em linguagem natural que não contenha jargão técnico
+  if (
+    bodyData?.message &&
+    typeof bodyData.message === 'string' &&
+    !bodyData.message.toLowerCase().includes('edge function') &&
+    !bodyData.message.toLowerCase().includes('status code')
+  ) {
+    return {
+      rateLimited: false,
+      message: bodyData.message,
+    };
+  }
+
+  return {
+    rateLimited: false,
+    message: defaultMessage,
+  };
+}
+
+/**
+ * Dispara um Sinal de Cuidado consentido para o pastor (Edge Function send-pastoral-alert).
  * Valida autorização ativa e rate limiting (7 dias / 48 horas) no servidor.
  */
 export async function sendPastoralCareSignal(params: {
@@ -331,27 +384,24 @@ export async function sendPastoralCareSignal(params: {
     });
 
     if (error) {
-      if (error.message?.includes('rate_limited') || error.message?.includes('429')) {
-        return {
-          success: false,
-          rateLimited: true,
-          message: 'Um sinal já foi enviado recentemente. Respeitamos a janela pastoral.',
-        };
-      }
-      return { success: false, message: error.message };
+      const parsed = await extractPastoralErrorMessage(
+        error,
+        'Não foi possível enviar o sinal no momento. Tente novamente mais tarde.'
+      );
+      return { success: false, rateLimited: parsed.rateLimited, message: parsed.message };
     }
 
     if (data?.error === 'rate_limited') {
       return {
         success: false,
         rateLimited: true,
-        message: data.message,
+        message: data.message || 'Um sinal já foi enviado recentemente. Respeitamos a janela pastoral.',
       };
     }
 
     return { success: Boolean(data?.success), message: data?.message };
-  } catch (err: any) {
-    return { success: false, message: err?.message || 'Falha de conexão ao enviar sinal.' };
+  } catch (_err: any) {
+    return { success: false, message: 'Não foi possível enviar o sinal no momento. Tente novamente mais tarde.' };
   }
 }
 
@@ -372,27 +422,24 @@ export async function sendExplicitHelpRequest(): Promise<{
     });
 
     if (error) {
-      if (error.message?.includes('rate_limited') || error.message?.includes('429')) {
-        return {
-          success: false,
-          rateLimited: true,
-          message: 'Você já solicitou amparo hoje. Seu contato foi avisado.',
-        };
-      }
-      return { success: false, message: error.message };
+      const parsed = await extractPastoralErrorMessage(
+        error,
+        'Não foi possível enviar o pedido de amparo no momento. Tente novamente mais tarde.'
+      );
+      return { success: false, rateLimited: parsed.rateLimited, message: parsed.message };
     }
 
     if (data?.error === 'rate_limited') {
       return {
         success: false,
         rateLimited: true,
-        message: data.message,
+        message: data.message || 'Você já solicitou amparo hoje. Seu contato foi avisado.',
       };
     }
 
     return { success: Boolean(data?.success), message: data?.message };
-  } catch (err: any) {
-    return { success: false, message: err?.message || 'Falha de conexão ao enviar pedido.' };
+  } catch (_err: any) {
+    return { success: false, message: 'Não foi possível enviar o pedido de amparo no momento. Tente novamente mais tarde.' };
   }
 }
 
@@ -426,21 +473,18 @@ export async function sendPastoralEcosystemEmail(params: {
     });
 
     if (error) {
-      if (error.message?.includes('rate_limited') || error.message?.includes('429')) {
-        return {
-          success: false,
-          rateLimited: true,
-          message: 'Um aviso já foi compartilhado recentemente. Respeitamos a janela pastoral.',
-        };
-      }
-      return { success: false, message: error.message };
+      const parsed = await extractPastoralErrorMessage(
+        error,
+        'Não foi possível enviar a mensagem no momento. Tente novamente mais tarde.'
+      );
+      return { success: false, rateLimited: parsed.rateLimited, message: parsed.message };
     }
 
     if (data?.error === 'rate_limited') {
       return {
         success: false,
         rateLimited: true,
-        message: data.message,
+        message: data.message || 'Um aviso já foi compartilhado recentemente. Respeitamos a janela pastoral.',
       };
     }
 
@@ -449,10 +493,10 @@ export async function sendPastoralEcosystemEmail(params: {
       message: data?.message,
       deliveryStatus: data?.delivery_status,
     };
-  } catch (err: any) {
+  } catch (_err: any) {
     return {
       success: false,
-      message: err?.message || 'Falha de conexão ao enviar notificação pastoral.',
+      message: 'Não foi possível enviar a mensagem no momento. Tente novamente mais tarde.',
     };
   }
 }

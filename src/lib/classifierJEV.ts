@@ -289,7 +289,7 @@ export function getPastoralPillCopy(
       return {
         title: 'Cuidado & Acolhimento Pastoral',
         prompt: `Percebemos que seu dia está pesado. Quer enviar um sinal discreto de oração para o Pr. ${pName}?`,
-        buttonLabel: '✉️ Avisar Pastor',
+        buttonLabel: 'Avisar Pastor',
         iconName: 'heart',
       };
 
@@ -297,7 +297,7 @@ export function getPastoralPillCopy(
       return {
         title: 'Estudo Bíblico & Contexto Profundo',
         prompt: `Esta passagem possui um contexto profundo! Quer enviar uma pergunta de estudo para o Pr. ${pName}?`,
-        buttonLabel: '✉️ Tirar Dúvida com Pastor',
+        buttonLabel: 'Tirar Dúvida com Pastor',
         iconName: 'book-open',
       };
 
@@ -305,7 +305,7 @@ export function getPastoralPillCopy(
       return {
         title: 'Ação de Graças & Gratidão',
         prompt: `Deus é fiel! Quer compartilhar essa alegria com o Pr. ${pName}?`,
-        buttonLabel: '✉️ Enviar Ação de Graças',
+        buttonLabel: 'Enviar Ação de Graças',
         iconName: 'sun',
       };
 
@@ -313,7 +313,7 @@ export function getPastoralPillCopy(
       return {
         title: 'Oração Respondida & Celebração',
         prompt: `Deus respondeu sua oração! Quer notificar o Pr. ${pName} para celebrarem juntos?`,
-        buttonLabel: '✉️ Compartilhar Testemunho',
+        buttonLabel: 'Compartilhar Testemunho',
         iconName: 'check-circle',
       };
   }

@@ -38,7 +38,7 @@ describe('Ecossistema Completo de Cuidado Pastoral (4 Pilares)', () => {
         copy.prompt,
         `Percebemos que seu dia está pesado. Quer enviar um sinal discreto de oração para o Pr. ${pastorName}?`
       );
-      assert.equal(copy.buttonLabel, '✉️ Avisar Pastor');
+      assert.equal(copy.buttonLabel, 'Avisar Pastor');
     });
   });
 
@@ -81,7 +81,7 @@ describe('Ecossistema Completo de Cuidado Pastoral (4 Pilares)', () => {
         copy.prompt,
         `Esta passagem possui um contexto profundo! Quer enviar uma pergunta de estudo para o Pr. ${pastorName}?`
       );
-      assert.equal(copy.buttonLabel, '✉️ Tirar Dúvida com Pastor');
+      assert.equal(copy.buttonLabel, 'Tirar Dúvida com Pastor');
     });
   });
 
@@ -112,7 +112,7 @@ describe('Ecossistema Completo de Cuidado Pastoral (4 Pilares)', () => {
         copy.prompt,
         `Deus é fiel! Quer compartilhar essa alegria com o Pr. ${pastorName}?`
       );
-      assert.equal(copy.buttonLabel, '✉️ Enviar Ação de Graças');
+      assert.equal(copy.buttonLabel, 'Enviar Ação de Graças');
     });
   });
 
@@ -144,7 +144,7 @@ describe('Ecossistema Completo de Cuidado Pastoral (4 Pilares)', () => {
         copy.prompt,
         `Deus respondeu sua oração! Quer notificar o Pr. ${pastorName} para celebrarem juntos?`
       );
-      assert.equal(copy.buttonLabel, '✉️ Compartilhar Testemunho');
+      assert.equal(copy.buttonLabel, 'Compartilhar Testemunho');
     });
   });
 
