@@ -93,10 +93,25 @@ const THANKSGIVING_PATTERNS = [
 ];
 
 const THEOLOGICAL_QUERY_PATTERNS = [
+  /d[úu]vidas?/i,
+  /gerou d[úu]vida/i,
+  /fiquei na d[úu]vida/i,
+  /estou com d[úu]vida/i,
+  /te[óo]log(o|a)s?/i,
+  /estudiosos/i,
+  /question(o|ei|ando|amento|amentos)?/i,
+  /jesus.*existiu/i,
+  /historicidade/i,
+  /apolog[ée]tica/i,
+  /dificuldade de crer/i,
+  /ser[áa] verdade/i,
+  /ser[áa] que deus/i,
+  /ser[áa] que jesus/i,
+  /mito ou verdade/i,
   /d[úu]vida de estudo/i,
   /d[úu]vida sobre/i,
   /o que significa/i,
-  /n[ãa]o entendi o vers[íi]culo/i,
+  /n[ãa]o entendi/i,
   /como entender/i,
   /qual o significado/i,
   /passagem dif[íi]cil/i,
@@ -161,11 +176,11 @@ export function classifyPastoralIntentLocally(
   const hasQuestionMark = fullText.includes('?');
   const hasRef = Boolean(input.bible_ref);
 
-  if (isTheologicalQuery || (hasQuestionMark && hasRef && fullText.length >= 25)) {
+  if (isTheologicalQuery || (hasQuestionMark && (hasRef || fullText.length >= 20))) {
     return {
       intent: 'THEOLOGICAL_QUERY',
       confidence: isTheologicalQuery ? 0.92 : 0.85,
-      reason: 'Questionamento de estudo bíblico ou passagem com contexto teológico denso.',
+      reason: 'Questionamento de estudo bíblico, reflexão apologética ou dúvida sobre as Escrituras.',
       biblical_reference: biblicalRef,
       evaluated_at: evaluatedAt,
     };

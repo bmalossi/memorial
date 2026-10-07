@@ -65,6 +65,16 @@ describe('Ecossistema Completo de Cuidado Pastoral (4 Pilares)', () => {
       assert.ok(result.confidence >= 0.80);
     });
 
+    it('deve classificar questionamento de fé sobre teólogos e historicidade de Jesus como THEOLOGICAL_QUERY', () => {
+      const result = classifyPastoralIntentLocally({
+        text: 'Eu estive vendo videos de teologos estudiosos dizendo que Jesus nunca existiu, isso me gerou duvidas',
+        category: 'reflexao',
+      });
+
+      assert.equal(result.intent, 'THEOLOGICAL_QUERY');
+      assert.ok(result.confidence >= 0.80, `Esperado >= 0.80, recebido ${result.confidence}`);
+    });
+
     it('deve retornar a cópia exata da pílula de THEOLOGICAL_QUERY', () => {
       const copy = getPastoralPillCopy('THEOLOGICAL_QUERY', pastorName, 'Romanos 9:15');
       assert.equal(
