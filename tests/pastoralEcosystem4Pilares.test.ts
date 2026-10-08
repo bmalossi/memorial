@@ -32,6 +32,26 @@ describe('Ecossistema Completo de Cuidado Pastoral (4 Pilares)', () => {
       assert.ok(result.confidence >= 0.80);
     });
 
+    it('deve classificar relato de depressão, separação e perda de vontade de viver como CRISIS (relato real do usuário)', () => {
+      const result = classifyPastoralIntentLocally({
+        text: 'Então, tô passando por um momento muito difícil, não sei o que fazer da minha vida. Separei da minha esposa, meus filhos foram levados por ela, tô sozinho, não sei o que fazer, não sei o que fazer da minha vida, não sei o que fazer da minha vida, estou perdido, não sei, não tô com mais vontade de viver.',
+        category: 'reflexao',
+      });
+
+      assert.equal(result.intent, 'CRISIS');
+      assert.ok(result.confidence >= 0.95);
+    });
+
+    it('deve classificar relato contendo depressão e falta de sentido como CRISIS', () => {
+      const result = classifyPastoralIntentLocally({
+        text: 'Estou com depressão profunda e não tenho mais vontade de viver.',
+        category: 'reflexao',
+      });
+
+      assert.equal(result.intent, 'CRISIS');
+      assert.ok(result.confidence >= 0.95);
+    });
+
     it('deve retornar a cópia exata da pílula de CRISIS', () => {
       const copy = getPastoralPillCopy('CRISIS', pastorName);
       assert.equal(

@@ -26,6 +26,7 @@ import { PastoralCareBanner } from '../../components/memorial/PastoralCareBanner
 import { PastoralCareActionBanner } from '../../components/memorial/PastoralCareActionBanner';
 import { PastoralOnboardingBanner } from '../../components/memorial/PastoralOnboardingBanner';
 import { AtalaiaContactModal } from '../../components/memorial/AtalaiaContactModal';
+import { AtalaiaCrisisModal } from '../../components/memorial/AtalaiaCrisisModal';
 import { PastoralContact } from '../../lib/atalaiaTypes';
 import { PastoralIntent } from '../../lib/types';
 import {
@@ -828,6 +829,12 @@ export function LinhasagradaScreen({ navigation }: Props) {
   });
   const [isSendingPastoralAction, setIsSendingPastoralAction] = useState(false);
   const [atalaiaModalVisible, setAtalaiaModalVisible] = useState(false);
+  const [crisisModalData, setCrisisModalData] = useState<{
+    visible: boolean;
+    pastorName?: string;
+    hasActivePastor?: boolean;
+    noteId?: string;
+  }>({ visible: false });
   const [pastoralContact, setPastoralContact] = useState<PastoralContact | null>(null);
   const [feedbackDialog, setFeedbackDialog] = useState<{
     visible: boolean;
@@ -1036,6 +1043,18 @@ export function LinhasagradaScreen({ navigation }: Props) {
 
         // Regra de interface: confidence >= 0.80 E pastor_status == 'active'
         const hasActivePastor = contact?.status === 'active';
+
+        // 🚨 CASO SÉRIO: CRISIS (Depressão, aflição aguda ou perda de vontade de viver)
+        // Exibe IMEDIATAMENTE o popup solene de intervenção e apoio à vida (CVV 188)
+        if (classification.intent === 'CRISIS') {
+          setCrisisModalData({
+            visible: true,
+            pastorName: contact?.name,
+            hasActivePastor,
+            noteId: saved.id,
+          });
+        }
+
         if (shouldShowPastoralActionBanner(classification, contact?.status)) {
           await clearCareBannerDismissal();
           setCareBannerState({
@@ -1048,7 +1067,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
             biblicalReference: classification.biblical_reference || saved.bible_ref?.display,
           });
         } else if (classification.intent === 'CRISIS' && !hasActivePastor) {
-          // Se for crise e não tiver pastor ativo, exibe acolhimento fraterno com opção de cadastrar
+          // Se for crise e não tiver pastor ativo, também mantém o banner de acolhimento na lista
           await clearCareBannerDismissal();
           setCareBannerState({
             visible: true,
@@ -1435,6 +1454,22 @@ export function LinhasagradaScreen({ navigation }: Props) {
         onContactUpdated={async () => {
           const contact = await fetchCurrentPastoralContact();
           setPastoralContact(contact);
+        }}
+      />
+
+      <AtalaiaCrisisModal
+        visible={crisisModalData.visible}
+        onClose={() => setCrisisModalData((prev) => ({ ...prev, visible: false }))}
+        pastorName={crisisModalData.pastorName}
+        hasActivePastor={crisisModalData.hasActivePastor}
+        onConfigurePastor={handleConfigureCareContact}
+        onSendPastoralAlert={async () => {
+          if (crisisModalData.noteId) {
+            await sendPastoralEcosystemEmail({
+              type: 'CRISIS',
+              noteId: crisisModalData.noteId,
+            });
+          }
         }}
       />
 

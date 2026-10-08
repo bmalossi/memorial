@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,11 @@ import {
 import { attachAiConnectionsToMemorial } from '../../lib/aiConnectionService';
 import { VisualShareModal, VisualShareData } from '../../components/memorial/VisualShareModal';
 import { ActionSheetModal, ActionSheetItem, ConfirmModal } from '../../components/ui';
+import { AtalaiaCrisisModal } from '../../components/memorial/AtalaiaCrisisModal';
+import { AtalaiaContactModal } from '../../components/memorial/AtalaiaContactModal';
+import { classifyPastoralIntentLocally } from '../../lib/classifierJEV';
+import { fetchCurrentPastoralContact, sendPastoralEcosystemEmail } from '../../lib/atalaiaStore';
+import { PastoralContact } from '../../lib/atalaiaTypes';
 
 // ─── Chip de referência bíblica ───────────────────────────────────────────────
 function BibleRefChip({ display, onPress }: { display: string; onPress: () => void }) {
@@ -636,6 +641,30 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
     message: '',
   });
 
+  // Detecção Imediata de Situação de Crise e Acolhimento
+  const isCrisisEntry = useMemo(() => {
+    const res = classifyPastoralIntentLocally({
+      text: currentEntry.content,
+      title: currentEntry.title,
+      category: currentEntry.category,
+    });
+    return res.intent === 'CRISIS';
+  }, [currentEntry.content, currentEntry.title, currentEntry.category]);
+
+  const [crisisModalVisible, setCrisisModalVisible] = useState(isCrisisEntry);
+  const [pastoralContact, setPastoralContact] = useState<PastoralContact | null>(null);
+  const [atalaiaContactModalVisible, setAtalaiaContactModalVisible] = useState(false);
+
+  useEffect(() => {
+    if (isCrisisEntry) {
+      setCrisisModalVisible(true);
+    }
+  }, [isCrisisEntry]);
+
+  useEffect(() => {
+    fetchCurrentPastoralContact().then(setPastoralContact).catch(() => {});
+  }, []);
+
   const cfg = CATEGORY_CONFIG[currentEntry.category];
   const s = useMemo(() => getMarcoStyles(colors, isDark), [colors, isDark]);
 
@@ -853,6 +882,31 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Banner de Acolhimento e Apoio à Vida (Casos Sérios) ── */}
+        {isCrisisEntry && (
+          <TouchableOpacity
+            style={s.crisisSupportCard}
+            onPress={() => setCrisisModalVisible(true)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Acolhimento Atalaia. Ligue no CVV 188 ou acione apoio pastoral."
+          >
+            <View style={s.crisisSupportLeft}>
+              <View style={s.crisisSupportIconCircle}>
+                <Feather name="heart" size={16} color={isDark ? '#FCA5A5' : '#991B1B'} />
+              </View>
+              <View style={s.crisisSupportTextWrap}>
+                <Text style={s.crisisSupportTitle}>Você não está sozinho · Apoio à Vida</Text>
+                <Text style={s.crisisSupportSub}>Toque para ligar no CVV 188 ou acionar amparo pastoral</Text>
+              </View>
+            </View>
+            <View style={s.crisisSupportBtnPill}>
+              <Feather name="phone-call" size={12} color={isDark ? '#FCA5A5' : '#991B1B'} />
+              <Text style={s.crisisSupportBtnText}>Ligue 188</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* ── Cabeçalho do registro ── */}
         <View style={s.entryHeader}>
           <View style={s.metaRow}>
@@ -1011,6 +1065,37 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
         cancelLabel=""
         destructive={infoModal.destructive}
         onConfirm={() => setInfoModal((prev) => ({ ...prev, visible: false }))}
+      />
+
+      {/* ── Modal Imediato de Acolhimento e Apoio à Vida ── */}
+      <AtalaiaCrisisModal
+        visible={crisisModalVisible}
+        onClose={() => setCrisisModalVisible(false)}
+        pastorName={pastoralContact?.name}
+        hasActivePastor={Boolean(pastoralContact?.email)}
+        onConfigurePastor={() => {
+          setCrisisModalVisible(false);
+          setAtalaiaContactModalVisible(true);
+        }}
+        onSendPastoralAlert={async () => {
+          if (currentEntry.id) {
+            await sendPastoralEcosystemEmail({
+              type: 'CRISIS',
+              noteId: currentEntry.id,
+            });
+          }
+        }}
+      />
+
+      {/* ── Modal de Configuração Pastoral Atalaia ── */}
+      <AtalaiaContactModal
+        visible={atalaiaContactModalVisible}
+        onClose={() => setAtalaiaContactModalVisible(false)}
+        currentContact={pastoralContact}
+        onContactUpdated={async () => {
+          const contact = await fetchCurrentPastoralContact();
+          setPastoralContact(contact);
+        }}
       />
     </View>
   );
@@ -1171,6 +1256,66 @@ function getMarcoStyles(colors: ColorTokens, isDark: boolean) {
     color:      colors.text.secondary,
     fontSize:   typography.size.sm,
     fontWeight: typography.weight.medium,
+  },
+
+  // ── Acolhimento e Apoio à Vida (Crise / Atalaia)
+  crisisSupportCard: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
+    backgroundColor:   isDark ? '#2D1418' : '#FEF2F2',
+    borderWidth:       1,
+    borderColor:       isDark ? 'rgba(239, 68, 68, 0.35)' : '#FECACA',
+    borderRadius:      radius.md,
+    paddingHorizontal: spacing['4'],
+    paddingVertical:   spacing['3'],
+    marginBottom:      spacing['2'],
+  },
+  crisisSupportLeft: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    flex:          1,
+    marginRight:   spacing['3'],
+    gap:           spacing['3'],
+  },
+  crisisSupportIconCircle: {
+    width:           34,
+    height:          34,
+    borderRadius:    17,
+    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.2)' : '#FEE2E2',
+    alignItems:      'center',
+    justifyContent:  'center',
+  },
+  crisisSupportTextWrap: {
+    flex: 1,
+    gap:  2,
+  },
+  crisisSupportTitle: {
+    color:         isDark ? '#FCA5A5' : '#991B1B',
+    fontSize:      12.5,
+    fontWeight:    typography.weight.bold,
+    letterSpacing: 0.3,
+  },
+  crisisSupportSub: {
+    color:      isDark ? '#E5E7EB' : '#4B5563',
+    fontSize:   11,
+    lineHeight: 15,
+  },
+  crisisSupportBtnPill: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             5,
+    paddingHorizontal: 10,
+    paddingVertical:   6,
+    borderRadius:    radius.full,
+    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.25)' : '#FEE2E2',
+    borderWidth:     1,
+    borderColor:     isDark ? 'rgba(239, 68, 68, 0.45)' : '#FCA5A5',
+  },
+  crisisSupportBtnText: {
+    color:      isDark ? '#FCA5A5' : '#991B1B',
+    fontSize:   11,
+    fontWeight: typography.weight.bold,
   },
 });
 }
