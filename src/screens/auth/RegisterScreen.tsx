@@ -143,7 +143,6 @@ export function RegisterScreen({ navigation }: Props) {
   const [pwErr, setPwErr]                     = useState('');
   const [confirmPwErr, setConfirmPwErr]       = useState('');
   const [globalErr, setGlobalErr]             = useState('');
-  const [successMsg, setSuccessMsg]           = useState('');
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -193,7 +192,6 @@ export function RegisterScreen({ navigation }: Props) {
 
   const handleRegister = async () => {
     setGlobalErr('');
-    setSuccessMsg('');
     if (!validate()) return;
 
     setLoading(true);
@@ -269,7 +267,6 @@ export function RegisterScreen({ navigation }: Props) {
 
   const handleGoogleLogin = async () => {
     setGlobalErr('');
-    setSuccessMsg('');
     setGoogleLoading(true);
     try {
       const res = await initiateGoogleOAuth();
@@ -339,17 +336,6 @@ export function RegisterScreen({ navigation }: Props) {
               <View style={s.errorBanner}>
                 <Feather name="alert-circle" size={15} color={colors.error} />
                 <Text style={s.errorBannerText}>{globalErr}</Text>
-              </View>
-            )}
-
-            {/* ── Mensagem de Sucesso (Ex: Confirmação de E-mail) ── */}
-            {!!successMsg && (
-              <View style={s.successBanner}>
-                <Feather name="check-circle" size={16} color={colors.success} />
-                <View style={{ flex: 1 }}>
-                  <Text style={s.successBannerTitle}>Quase lá!</Text>
-                  <Text style={s.successBannerText}>{successMsg}</Text>
-                </View>
               </View>
             )}
 
@@ -609,33 +595,6 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       color: colors.error,
       fontSize: typography.size.xs,
       lineHeight: 17,
-    },
-
-    successBanner: {
-      width: '100%',
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: 10,
-      backgroundColor: isDark ? '#14261C' : '#E8F5E9',
-      borderWidth: 1,
-      borderColor: isDark ? '#234F35' : '#C8E6C9',
-      borderRadius: radius.md,
-      paddingHorizontal: spacing['4'],
-      paddingVertical: spacing['3'],
-      marginBottom: spacing['3'],
-    },
-
-    successBannerTitle: {
-      color: colors.success,
-      fontSize: typography.size.sm,
-      fontWeight: typography.weight.bold,
-      marginBottom: 2,
-    },
-
-    successBannerText: {
-      color: colors.text.secondary,
-      fontSize: typography.size.xs,
-      lineHeight: 18,
     },
 
     form: {
