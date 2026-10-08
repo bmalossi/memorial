@@ -27,10 +27,11 @@ import {
 } from '../src/lib/authOAuthUtils';
 
 describe('Autenticação Unificada Bíblia Vive & Google OAuth (authOAuthService)', () => {
-  it('deve conter os esquemas de redirecionamento canônicos (memorial e exp+memorial-app)', () => {
+  it('deve conter os esquemas de redirecionamento canônicos (ponte memorial, memorial e exp+memorial-app)', () => {
+    assert.ok(OAUTH_REDIRECT_SCHEMES.includes('https://bibliavive.com.br/memorial/auth/callback'));
     assert.ok(OAUTH_REDIRECT_SCHEMES.includes('memorial://auth/callback'));
     assert.ok(OAUTH_REDIRECT_SCHEMES.includes('exp+memorial-app://auth/callback'));
-    assert.strictEqual(DEFAULT_OAUTH_REDIRECT, 'exp+memorial-app://auth/callback');
+    assert.strictEqual(DEFAULT_OAUTH_REDIRECT, 'https://bibliavive.com.br/memorial/auth/callback');
   });
 
   describe('Extração de Tokens do Hash Fragment (Fluxo Implicit)', () => {

@@ -5,12 +5,15 @@
  * Funções puras sem dependência direta do runtime React Native.
  */
 
+export const MEMORIAL_AUTH_BRIDGE_URL = 'https://bibliavive.com.br/memorial/auth/callback';
+
 export const OAUTH_REDIRECT_SCHEMES = [
-  'exp+memorial-app://auth/callback',
+  MEMORIAL_AUTH_BRIDGE_URL,
   'memorial://auth/callback',
+  'exp+memorial-app://auth/callback',
 ] as const;
 
-export const DEFAULT_OAUTH_REDIRECT = 'exp+memorial-app://auth/callback';
+export const DEFAULT_OAUTH_REDIRECT = MEMORIAL_AUTH_BRIDGE_URL;
 
 export const PASTORAL_ONBOARDING_DISMISS_KEY = '@memorial_pastoral_onboarding_dismissed_at';
 export const PASTORAL_DISMISS_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
