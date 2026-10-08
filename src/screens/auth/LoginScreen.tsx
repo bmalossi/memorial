@@ -23,6 +23,7 @@ import {
   saveCredentials,
   clearSavedCredentials,
 } from '../../lib/authCredentialsStore';
+import { initiateGoogleOAuth } from '../../lib/authOAuthService';
 
 const { width: W } = Dimensions.get('window');
 
@@ -130,6 +131,7 @@ export function LoginScreen({ navigation }: Props) {
   const [rememberMe, setRememberMe]     = useState(false);
   const [showPw, setShowPw]             = useState(false);
   const [loading, setLoading]           = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [emailErr, setEmailErr]         = useState('');
   const [pwErr, setPwErr]               = useState('');
 
@@ -217,15 +219,16 @@ export function LoginScreen({ navigation }: Props) {
   const handleGoogleLogin = async () => {
     setPwErr('');
     setEmailErr('');
+    setGoogleLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-      });
-      if (error) {
-        setPwErr('Não foi possível iniciar o login com o Google.');
+      const res = await initiateGoogleOAuth();
+      if (!res.success && res.error) {
+        setPwErr(res.error);
       }
     } catch {
       setPwErr('Não foi possível iniciar o login com o Google.');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -372,11 +375,14 @@ export function LoginScreen({ navigation }: Props) {
                 style={s.googleBtn}
                 onPress={handleGoogleLogin}
                 activeOpacity={0.8}
+                disabled={googleLoading}
                 accessibilityLabel="Continuar com o Google"
                 accessibilityRole="button"
               >
                 <Text style={s.googleIcon}>G</Text>
-                <Text style={s.googleBtnText}>Continuar com o Google</Text>
+                <Text style={s.googleBtnText}>
+                  {googleLoading ? 'Conectando ao Google...' : 'Continuar com o Google'}
+                </Text>
               </TouchableOpacity>
 
               {/* Criar conta */}

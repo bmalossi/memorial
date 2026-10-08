@@ -2,6 +2,7 @@
   "expo": {
     "name": "Memorial",
     "slug": "memorial-app",
+    "scheme": "memorial",
     "version": "1.0.0",
     "runtimeVersion": {
       "policy": "appVersion"
@@ -21,7 +22,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "br.bibliavive.memorial",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "O Memorial usa o microfone para transcrever seus registros espirituais por voz.",
         "NSCameraUsageDescription": "O Memorial usa a câmera para adicionar imagens aos seus registros."
@@ -29,7 +30,7 @@
     },
     "android": {
       "package": "br.bibliavive.memorial",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#141210"

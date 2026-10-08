@@ -24,6 +24,7 @@ import { MemorialEntry } from '../../lib/types';
 import { MemorialCategory, supabase } from '../../lib/supabase';
 import { PastoralCareBanner } from '../../components/memorial/PastoralCareBanner';
 import { PastoralCareActionBanner } from '../../components/memorial/PastoralCareActionBanner';
+import { PastoralOnboardingBanner } from '../../components/memorial/PastoralOnboardingBanner';
 import { AtalaiaContactModal } from '../../components/memorial/AtalaiaContactModal';
 import { PastoralContact } from '../../lib/atalaiaTypes';
 import { PastoralIntent } from '../../lib/types';
@@ -1343,6 +1344,11 @@ export function LinhasagradaScreen({ navigation }: Props) {
           onSelectTheme={(theme) => setSearchQuery(theme)}
         />
       )}
+
+      <PastoralOnboardingBanner
+        visible={!loading && !pastoralContact && !isSearchOpen}
+        onLinkPastor={() => setAtalaiaModalVisible(true)}
+      />
 
       {loading && entries.length === 0 ? (
         <View style={ls.loadingContainer}>

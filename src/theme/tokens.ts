@@ -47,6 +47,7 @@ export interface ColorTokens {
   black: string;
   transparent: string;
   error: string;
+  success: string;
 }
 
 // ── Tema Escuro (Contemplativo & Solene) ──────────────────────────────────
@@ -87,6 +88,7 @@ export const darkColors: ColorTokens = {
   black:       '#000000',
   transparent: 'transparent',
   error:       '#D15B5B',   // Erro discreto, sem saturação berrante
+  success:     '#48BB78',   // Verde esperança sereno
 };
 
 // ── Tema Claro (Branco Marfim & Pergaminho Sagrado) ────────────────────────
@@ -128,6 +130,7 @@ export const lightColors: ColorTokens = {
   black:       '#000000',
   transparent: 'transparent',
   error:       '#C94A4A',   // Carmesim respeitoso
+  success:     '#2F855A',   // Verde floresta equilibrado
 };
 
 // Objeto de cores padrão (fallback mutável para imports estáticos)

@@ -1,15 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, ActivityIndicator, Image, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, Image, StyleSheet, Linking } from 'react-native';
 import { NavigationContainer, DarkTheme, DefaultTheme, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { Session } from '@supabase/supabase-js';
 import { LoginScreen }           from '../screens/auth/LoginScreen';
+import { RegisterScreen }        from '../screens/auth/RegisterScreen';
+import { ForgotPasswordScreen }  from '../screens/auth/ForgotPasswordScreen';
 import { MarcoDetalheScreen }    from '../screens/main/MarcoDetalheScreen';
 import { MainNavigator }         from './MainNavigator';
 import { useTheme } from '../theme';
 import { MemorialEntry } from '../lib/types';
 import { supabase } from '../lib/supabase';
+import { handleAuthRedirectUrl } from '../lib/authOAuthService';
 import {
   initNotificationHandler,
   setupNotificationChannel,
@@ -45,6 +48,8 @@ function AuthNavigator() {
       }}
     >
       <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen name="Register" component={RegisterScreen} />
+      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     </AuthStack.Navigator>
   );
 }
@@ -108,9 +113,26 @@ export function RootNavigator() {
       setSession(currentSession);
     });
 
+    // 4. Escuta deep links de retorno OAuth (Google / Magic Link)
+    const handleDeepLink = async (event: { url: string }) => {
+      const url = event?.url;
+      if (url && (url.includes('auth/callback') || url.includes('access_token=') || url.includes('code='))) {
+        await handleAuthRedirectUrl(url);
+      }
+    };
+
+    const linkingSub = Linking.addEventListener('url', handleDeepLink);
+
+    Linking.getInitialURL().then((initialUrl) => {
+      if (initialUrl && (initialUrl.includes('auth/callback') || initialUrl.includes('access_token=') || initialUrl.includes('code='))) {
+        handleAuthRedirectUrl(initialUrl);
+      }
+    });
+
     return () => {
       unsubscribeNotifications();
       subscription.unsubscribe();
+      linkingSub.remove();
     };
   }, []);
 
