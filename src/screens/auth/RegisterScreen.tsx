@@ -204,6 +204,7 @@ export function RegisterScreen({ navigation }: Props) {
         email: cleanEmail,
         password,
         options: {
+          emailRedirectTo: 'https://bibliavive.com.br/memorial/confirmado',
           data: {
             name: cleanName,
             full_name: cleanName,
@@ -225,11 +226,37 @@ export function RegisterScreen({ navigation }: Props) {
         return;
       }
 
-      // Se a conta foi criada e requer confirmação de e-mail
+      // Caso 1: Usuário já cadastrado previamente no Bíblia Vive / Memorial
+      // (Supabase com Email Enumeration Protection retorna identities vazio sem erro e sem re-enviar e-mail)
+      const isAlreadyRegistered =
+        data?.user &&
+        Array.isArray(data.user.identities) &&
+        data.user.identities.length === 0;
+
+      if (isAlreadyRegistered) {
+        setName('');
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
+        navigation?.navigate?.('Login', {
+          alreadyRegistered: true,
+          registeredEmail: cleanEmail,
+        });
+        return;
+      }
+
+      // Caso 2: Conta nova criada com sucesso requerendo confirmação de e-mail
+      // Redireciona o usuário para a tela inicial de Login com aviso de confirmação e e-mail preenchido
       if (data?.user && !data?.session) {
-        setSuccessMsg(
-          'Conta criada com sucesso! Enviamos um link de confirmação para o seu e-mail para ativar seu acesso.'
-        );
+        setName('');
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
+        navigation?.navigate?.('Login', {
+          justRegistered: true,
+          registeredEmail: cleanEmail,
+        });
+        return;
       }
       // Se retornou sessão direta (confirmação automática desativada), onAuthStateChange assumirá o redirecionamento
     } catch (err: any) {

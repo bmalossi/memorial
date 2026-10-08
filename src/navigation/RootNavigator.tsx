@@ -22,7 +22,7 @@ import {
 import { fetchUserMemorials } from '../lib/memorialStore';
 
 export type AuthStackParamList = {
-  Login:          undefined;
+  Login:          { justRegistered?: boolean; alreadyRegistered?: boolean; registeredEmail?: string } | undefined;
   Register:       undefined;
   ForgotPassword: undefined;
 };

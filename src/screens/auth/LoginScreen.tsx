@@ -119,21 +119,29 @@ const field = StyleSheet.create({
 
 
 // ─── LoginScreen ──────────────────────────────────────────────────────────────
-interface Props { navigation?: any }
+interface Props {
+  navigation?: any;
+  route?: any;
+}
 
-export function LoginScreen({ navigation }: Props) {
+export function LoginScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const s = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
-  const [email, setEmail]               = useState('');
-  const [password, setPassword]         = useState('');
-  const [rememberMe, setRememberMe]     = useState(false);
-  const [showPw, setShowPw]             = useState(false);
-  const [loading, setLoading]           = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const [emailErr, setEmailErr]         = useState('');
-  const [pwErr, setPwErr]               = useState('');
+  const [email, setEmail]                         = useState('');
+  const [password, setPassword]                   = useState('');
+  const [rememberMe, setRememberMe]               = useState(false);
+  const [showPw, setShowPw]                       = useState(false);
+  const [loading, setLoading]                     = useState(false);
+  const [googleLoading, setGoogleLoading]         = useState(false);
+  const [emailErr, setEmailErr]                   = useState('');
+  const [pwErr, setPwErr]                         = useState('');
+  const [noticeInfo, setNoticeInfo]               = useState<{
+    title: string;
+    message: string;
+    icon?: 'mail' | 'info';
+  } | null>(null);
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -153,6 +161,27 @@ export function LoginScreen({ navigation }: Props) {
       }
     });
   }, []);
+
+  // Detecta redirecionamento vindo da criação de conta
+  useEffect(() => {
+    if (route?.params?.registeredEmail) {
+      setEmail(route.params.registeredEmail);
+
+      if (route.params.alreadyRegistered) {
+        setNoticeInfo({
+          icon: 'info',
+          title: 'CONTA JÁ CADASTRADA',
+          message: `O e-mail ${route.params.registeredEmail} já possui cadastro unificado no Bíblia Vive / Memorial. Digite sua senha para entrar ou recupere o acesso.`,
+        });
+      } else if (route.params.justRegistered) {
+        setNoticeInfo({
+          icon: 'mail',
+          title: 'CONFIRMAÇÃO ENVIADA',
+          message: `Enviamos um link de confirmação para ${route.params.registeredEmail}. Acesse sua caixa de entrada, confirme seu e-mail e faça login para entrar.`,
+        });
+      }
+    }
+  }, [route?.params]);
 
   const handleToggleRemember = () => {
     setRememberMe((prev) => {
@@ -269,6 +298,32 @@ export function LoginScreen({ navigation }: Props) {
             {/* ── Título ── */}
             <Text style={s.title}>Entrar</Text>
             <Text style={s.subtitle}>Entre na sua conta para continuar</Text>
+
+            {/* ── Notificação de Conta (Confirmação ou Conta Existente) ── */}
+            {!!noticeInfo && (
+              <View style={s.registeredNoticeBox}>
+                <View style={s.registeredNoticeIconWrap}>
+                  <Feather
+                    name={noticeInfo.icon === 'info' ? 'info' : 'mail'}
+                    size={15}
+                    color={colors.amber.DEFAULT}
+                  />
+                </View>
+                <View style={s.registeredNoticeTextWrap}>
+                  <Text style={s.registeredNoticeTitle}>{noticeInfo.title}</Text>
+                  <Text style={s.registeredNoticeBody}>{noticeInfo.message}</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setNoticeInfo(null)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={s.registeredNoticeClose}
+                  accessibilityLabel="Fechar aviso"
+                  accessibilityRole="button"
+                >
+                  <Feather name="x" size={14} color={colors.text.muted} />
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* ── Formulário ── */}
             <View style={s.form}>
@@ -456,6 +511,52 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       fontWeight:   typography.weight.regular,
       marginBottom: spacing['8'],
       letterSpacing: 0.1,
+    },
+
+    registeredNoticeBox: {
+      width: '100%',
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      backgroundColor: isDark ? '#1C1914' : '#FDFBF5',
+      borderWidth: 1,
+      borderColor: isDark ? '#3D3422' : '#E8DDBF',
+      borderRadius: radius.md,
+      paddingHorizontal: spacing['4'],
+      paddingVertical: spacing['3'],
+      marginBottom: spacing['6'],
+      gap: 10,
+    },
+
+    registeredNoticeIconWrap: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: isDark ? '#2B2416' : '#F5EACF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 1,
+    },
+
+    registeredNoticeTextWrap: {
+      flex: 1,
+      gap: 3,
+    },
+
+    registeredNoticeTitle: {
+      color: colors.amber.DEFAULT,
+      fontSize: 10.5,
+      fontWeight: typography.weight.bold,
+      letterSpacing: 0.8,
+    },
+
+    registeredNoticeBody: {
+      color: colors.text.secondary,
+      fontSize: typography.size.xs,
+      lineHeight: 18,
+    },
+
+    registeredNoticeClose: {
+      padding: 2,
     },
 
     form: {

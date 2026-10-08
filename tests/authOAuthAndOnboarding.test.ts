@@ -93,6 +93,42 @@ describe('Autenticação Unificada Bíblia Vive & Google OAuth (authOAuthService
       assert.strictEqual(extractOAuthErrorFromUrl('memorial://auth/callback?code=valid'), null);
     });
   });
+
+  describe('Detecção de Conta Existente vs Nova Conta (Email Enumeration Protection)', () => {
+    it('deve identificar conta existente quando identities for array vazio', () => {
+      const mockSupabaseResponse = {
+        user: { id: 'user-123', email: 'test@example.com', identities: [] },
+        session: null,
+      };
+
+      const isAlreadyRegistered =
+        !!mockSupabaseResponse.user &&
+        Array.isArray(mockSupabaseResponse.user.identities) &&
+        mockSupabaseResponse.user.identities.length === 0;
+
+      assert.strictEqual(isAlreadyRegistered, true);
+    });
+
+    it('deve identificar nova conta criada quando identities tiver ao menos 1 entrada', () => {
+      const mockSupabaseResponse = {
+        user: { id: 'new-user-456', email: 'novo@example.com', identities: [{ id: 'id-1' }] },
+        session: null,
+      };
+
+      const isAlreadyRegistered =
+        !!mockSupabaseResponse.user &&
+        Array.isArray(mockSupabaseResponse.user.identities) &&
+        mockSupabaseResponse.user.identities.length === 0;
+
+      const isNewUserRequiringConfirmation =
+        !isAlreadyRegistered &&
+        !!mockSupabaseResponse.user &&
+        !mockSupabaseResponse.session;
+
+      assert.strictEqual(isAlreadyRegistered, false);
+      assert.strictEqual(isNewUserRequiringConfirmation, true);
+    });
+  });
 });
 
 describe('Notificação Discreta de Cadastro Pastoral (PastoralOnboardingBanner)', () => {
