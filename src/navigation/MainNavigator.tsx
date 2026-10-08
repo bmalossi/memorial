@@ -47,6 +47,7 @@ export function MainNavigator() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
           backgroundColor: colors.bg.surface,
           borderTopWidth:  StyleSheet.hairlineWidth,

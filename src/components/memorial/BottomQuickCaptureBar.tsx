@@ -10,7 +10,7 @@ import {
   Animated,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useTheme, spacing, radius } from '../../theme';
+import { useTheme, spacing } from '../../theme';
 import {
   isNativeAudioAvailable,
   startNativeRecording,
@@ -45,19 +45,19 @@ export function BottomQuickCaptureBar({
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const inputRef = useRef<TextInput>(null);
 
-  // Animação de pulso sutil durante gravação de áudio
+  // Pulso discreto no ponto indicador de gravação
   useEffect(() => {
     if (isRecording) {
       const loop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
             toValue: 1.25,
-            duration: 650,
+            duration: 600,
             useNativeDriver: true,
           }),
           Animated.timing(pulseAnim, {
             toValue: 0.9,
-            duration: 650,
+            duration: 600,
             useNativeDriver: true,
           }),
         ])
@@ -73,7 +73,6 @@ export function BottomQuickCaptureBar({
     if (isTranscribing) return;
 
     if (isRecording) {
-      // Parar e transcrever
       try {
         setIsRecording(false);
         setIsTranscribing(true);
@@ -98,11 +97,10 @@ export function BottomQuickCaptureBar({
         setRecordingSeconds(0);
       }
     } else {
-      // Iniciar gravação
       if (!isNativeAudioAvailable()) {
         onError?.(
           'Gravação de Voz Nativa',
-          'A gravação de voz com transcrição em tempo real requer a Development Build do Memorial no aparelho.'
+          'A gravação de voz com transcrição em tempo real requer a Dev Build do Memorial.'
         );
         return;
       }
@@ -153,29 +151,25 @@ export function BottomQuickCaptureBar({
       style={[
         styles.capsule,
         {
-          backgroundColor: isDark ? '#1C1916' : '#FFFFFF',
-          borderColor: isDark ? 'rgba(231, 176, 117, 0.22)' : 'rgba(196, 139, 71, 0.22)',
+          backgroundColor: colors.bg.surface,
+          borderColor: colors.border.DEFAULT,
           shadowColor: isDark ? '#000000' : '#3A3228',
         },
       ]}
     >
-      {/* Botão '+' da esquerda: abre o modal completo de novo registro */}
+      {/* Ícone '+' à esquerda: discreto, limpo, sem moldura artificial */}
       <TouchableOpacity
         onPress={onOpenFullSheet}
-        style={[
-          styles.iconBtn,
-          {
-            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
-          },
-        ]}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={styles.iconBtn}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel="Abrir formulário completo de registro com versículos e categorias"
+        accessibilityLabel="Abrir formulário completo de registro"
       >
-        <Feather name="plus" size={19} color={colors.amber.DEFAULT} />
+        <Feather name="plus" size={20} color={colors.text.secondary} />
       </TouchableOpacity>
 
-      {/* Área Central: Campo de Texto expansível OU Indicador de Gravação/Transcrição */}
+      {/* Área Central: Entrada de texto OU Estado de gravação/transcrição */}
       {isRecording ? (
         <View style={styles.recordingRow}>
           <Animated.View
@@ -188,16 +182,16 @@ export function BottomQuickCaptureBar({
             ]}
           />
           <Text style={[styles.recordingTimerText, { color: colors.text.primary }]}>
-            Gravando ({formatTimer(recordingSeconds)})
+            Gravando {formatTimer(recordingSeconds)}
           </Text>
           <TouchableOpacity
             onPress={handleCancelVoice}
             style={styles.cancelVoiceBtn}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
-            accessibilityLabel="Cancelar gravação de voz"
+            accessibilityLabel="Cancelar gravação"
           >
-            <Feather name="x" size={15} color={colors.text.muted} />
+            <Feather name="x" size={16} color={colors.text.muted} />
           </TouchableOpacity>
         </View>
       ) : isTranscribing ? (
@@ -212,7 +206,7 @@ export function BottomQuickCaptureBar({
           ref={inputRef}
           value={value}
           onChangeText={onChangeText}
-          placeholder="O que Deus ministrou ao seu coração hoje? Registre uma memória..."
+          placeholder="Registre uma memória..."
           placeholderTextColor={colors.text.muted}
           multiline
           scrollEnabled={true}
@@ -226,64 +220,54 @@ export function BottomQuickCaptureBar({
         />
       )}
 
-      {/* Ações da Direita: Ícone de Voz + Botão Registrar */}
-      <View style={styles.rightActionsRow}>
-        {/* Ícone de microfone */}
+      {/* Ações da Direita: Ícone de Voz + Botão Circular de Ação */}
+      <View style={styles.rightGroup}>
+        {/* Ícone de microfone limpo */}
         <TouchableOpacity
           onPress={handleToggleVoice}
-          style={[
-            styles.micBtn,
-            isRecording && {
-              backgroundColor: isDark ? '#3D1C1F' : '#FDE8E8',
-            },
-          ]}
+          style={styles.iconBtn}
           disabled={isTranscribing}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={isRecording ? 'Parar e transcrever voz' : 'Gravar memória por voz'}
+          accessibilityLabel={isRecording ? 'Parar e transcrever' : 'Gravar por voz'}
         >
           {isRecording ? (
-            <Feather name="square" size={16} color={colors.error} />
+            <Feather name="square" size={18} color={colors.error} />
           ) : (
             <Feather
               name="mic"
-              size={18}
+              size={19}
               color={isTranscribing ? colors.text.muted : colors.text.secondary}
             />
           )}
         </TouchableOpacity>
 
-        {/* Botão Registrar */}
+        {/* Botão de Envio Circular — Fiel à imagem de referência */}
         <TouchableOpacity
           onPress={onSubmit}
           disabled={!canSubmit}
           style={[
-            styles.submitBtn,
+            styles.circleBtn,
             {
               backgroundColor: canSubmit
                 ? colors.amber.DEFAULT
-                : isDark
-                ? 'rgba(255, 255, 255, 0.06)'
-                : 'rgba(0, 0, 0, 0.05)',
+                : colors.bg.raised,
+              opacity: canSubmit ? 1 : 0.45,
             },
           ]}
-          activeOpacity={0.82}
+          activeOpacity={0.8}
           accessibilityRole="button"
-          accessibilityLabel="Registrar memória na Linha Sagrada"
+          accessibilityLabel="Registrar memória"
         >
           {isSubmitting ? (
             <ActivityIndicator size="small" color={colors.text.onAmber} />
           ) : (
-            <Text
-              style={[
-                styles.submitBtnText,
-                {
-                  color: canSubmit ? colors.text.onAmber : colors.text.muted,
-                },
-              ]}
-            >
-              Registrar
-            </Text>
+            <Feather
+              name="arrow-up"
+              size={19}
+              color={canSubmit ? colors.text.onAmber : colors.text.muted}
+            />
           )}
         </TouchableOpacity>
       </View>
@@ -296,37 +280,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: spacing['4'],
-    marginBottom: Platform.OS === 'ios' ? 10 : 8,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 26,
+    marginBottom: Platform.OS === 'ios' ? 8 : 6,
+    paddingLeft: 12,
+    paddingRight: 6,
+    paddingVertical: 5,
+    borderRadius: 28,
     borderWidth: 1,
     minHeight: 52,
     ...Platform.select({
       ios: {
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.22,
-        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.28,
+        shadowRadius: 8,
       },
       android: {
-        elevation: 8,
+        elevation: 6,
       },
     }),
   },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
   input: {
     flex: 1,
-    fontSize: 13.5,
-    lineHeight: 19,
+    fontSize: 14.5,
+    lineHeight: 20,
     minHeight: 36,
-    maxHeight: 110,
-    paddingHorizontal: 10,
+    maxHeight: 100,
+    paddingHorizontal: 8,
     paddingVertical: Platform.OS === 'ios' ? 7 : 4,
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
   },
@@ -334,17 +318,17 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     gap: 8,
   },
   recordingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
   },
   recordingTimerText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '500',
     letterSpacing: 0.2,
   },
   cancelVoiceBtn: {
@@ -355,36 +339,23 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     gap: 8,
   },
   transcribingText: {
     fontSize: 12.5,
     fontStyle: 'italic',
   },
-  rightActionsRow: {
+  rightGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
-  micBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+  circleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  submitBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 34,
-  },
-  submitBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.2,
   },
 });

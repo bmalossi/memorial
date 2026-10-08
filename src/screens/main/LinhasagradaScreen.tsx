@@ -846,6 +846,42 @@ export function LinhasagradaScreen({ navigation }: Props) {
   const [sheetInitialContent, setSheetInitialContent] = useState('');
   const [newlyCreatedId, setNewlyCreatedId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
+  const keyboardHeight = useRef(new Animated.Value(0)).current;
+
+  // Acompanhamento preciso e instantâneo do teclado móvel (Android & iOS)
+  useEffect(() => {
+    const onShow = (e: any) => {
+      const h = e?.endCoordinates?.height || 0;
+      if (h > 0) {
+        Animated.timing(keyboardHeight, {
+          toValue: h,
+          duration: e?.duration && e.duration > 50 ? e.duration : 150,
+          useNativeDriver: false,
+        }).start();
+      }
+    };
+
+    const onHide = (e: any) => {
+      Animated.timing(keyboardHeight, {
+        toValue: 0,
+        duration: e?.duration && e.duration > 50 ? e.duration : 150,
+        useNativeDriver: false,
+      }).start();
+    };
+
+    const subShow1 = Keyboard.addListener('keyboardWillShow', onShow);
+    const subShow2 = Keyboard.addListener('keyboardDidShow', onShow);
+    const subHide1 = Keyboard.addListener('keyboardWillHide', onHide);
+    const subHide2 = Keyboard.addListener('keyboardDidHide', onHide);
+
+    return () => {
+      subShow1.remove();
+      subShow2.remove();
+      subHide1.remove();
+      subHide2.remove();
+    };
+  }, []);
+
   const [syncInfo, setSyncInfo] = useState<SyncStateInfo>({
     status: 'local_only',
     lastSyncTime: null,
@@ -1451,6 +1487,8 @@ export function LinhasagradaScreen({ navigation }: Props) {
           ref={flatListRef}
           data={[]}
           renderItem={null}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
             <>
               <ListHeader />
@@ -1485,6 +1523,8 @@ export function LinhasagradaScreen({ navigation }: Props) {
           ref={flatListRef}
           data={filtered}
           keyExtractor={(e) => e.id}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
           ListHeaderComponent={<ListHeader />}
           renderItem={({ item: entry, index }) => (
             <TimelineItem
@@ -1514,11 +1554,14 @@ export function LinhasagradaScreen({ navigation }: Props) {
         />
       )}
 
-      {/* Caixa de Captura Rápida Docked no Rodapé */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 84 : 0}
-        style={ls.bottomDockContainer}
+      {/* Caixa de Captura Rápida Docked no Rodapé — Elevação Suave e Precisa Sobre o Teclado */}
+      <Animated.View
+        style={[
+          ls.bottomDockContainer,
+          {
+            bottom: keyboardHeight,
+          },
+        ]}
         pointerEvents="box-none"
       >
         <BottomQuickCaptureBar
@@ -1536,7 +1579,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
           }}
           isSubmitting={isQuickSubmitting}
         />
-      </KeyboardAvoidingView>
+      </Animated.View>
 
       <NovoRegistroSheet
         visible={sheetVisible}
