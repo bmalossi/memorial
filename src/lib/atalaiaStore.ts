@@ -5,10 +5,13 @@
  * através do cliente Supabase, respeitando rigorosamente as políticas RLS.
  */
 
-import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { PastoralIntent } from './types';
+
+function getPlatformOS(): string {
+  return 'android';
+}
 import {
   PastoralContact,
   PastoralAlert,
@@ -293,7 +296,7 @@ export async function evaluateCareTriage(entry: {
       body: {
         text: entry.text,
         category: entry.category,
-        platform: Platform.OS || 'android',
+        platform: getPlatformOS(),
       },
     });
 

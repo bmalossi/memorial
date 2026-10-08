@@ -1,4 +1,9 @@
-import 'react-native-url-polyfill/auto';
+// Em ambiente Node.js / testes, a API global URL é nativa e não requer polyfill móvel.
+if (typeof process === 'undefined' || !process.versions?.node) {
+  try {
+    require('react-native-url-polyfill/auto');
+  } catch {}
+}
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 

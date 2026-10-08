@@ -26,7 +26,7 @@ import { PastoralCareBanner } from '../../components/memorial/PastoralCareBanner
 import { PastoralCareActionBanner } from '../../components/memorial/PastoralCareActionBanner';
 import { PastoralOnboardingBanner } from '../../components/memorial/PastoralOnboardingBanner';
 import { AtalaiaContactModal } from '../../components/memorial/AtalaiaContactModal';
-import { AtalaiaCrisisModal } from '../../components/memorial/AtalaiaCrisisModal';
+import { triggerGlobalAtalaiaCrisis } from '../../lib/atalaiaCrisisManager';
 import { PastoralContact } from '../../lib/atalaiaTypes';
 import { PastoralIntent } from '../../lib/types';
 import {
@@ -829,12 +829,6 @@ export function LinhasagradaScreen({ navigation }: Props) {
   });
   const [isSendingPastoralAction, setIsSendingPastoralAction] = useState(false);
   const [atalaiaModalVisible, setAtalaiaModalVisible] = useState(false);
-  const [crisisModalData, setCrisisModalData] = useState<{
-    visible: boolean;
-    pastorName?: string;
-    hasActivePastor?: boolean;
-    noteId?: string;
-  }>({ visible: false });
   const [pastoralContact, setPastoralContact] = useState<PastoralContact | null>(null);
   const [feedbackDialog, setFeedbackDialog] = useState<{
     visible: boolean;
@@ -1047,7 +1041,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
         // 🚨 CASO SÉRIO: CRISIS (Depressão, aflição aguda ou perda de vontade de viver)
         // Exibe IMEDIATAMENTE o popup solene de intervenção e apoio à vida (CVV 188)
         if (classification.intent === 'CRISIS') {
-          setCrisisModalData({
+          triggerGlobalAtalaiaCrisis({
             visible: true,
             pastorName: contact?.name,
             hasActivePastor,
@@ -1454,22 +1448,6 @@ export function LinhasagradaScreen({ navigation }: Props) {
         onContactUpdated={async () => {
           const contact = await fetchCurrentPastoralContact();
           setPastoralContact(contact);
-        }}
-      />
-
-      <AtalaiaCrisisModal
-        visible={crisisModalData.visible}
-        onClose={() => setCrisisModalData((prev) => ({ ...prev, visible: false }))}
-        pastorName={crisisModalData.pastorName}
-        hasActivePastor={crisisModalData.hasActivePastor}
-        onConfigurePastor={handleConfigureCareContact}
-        onSendPastoralAlert={async () => {
-          if (crisisModalData.noteId) {
-            await sendPastoralEcosystemEmail({
-              type: 'CRISIS',
-              noteId: crisisModalData.noteId,
-            });
-          }
         }}
       />
 

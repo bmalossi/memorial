@@ -25,10 +25,9 @@ import {
 import { attachAiConnectionsToMemorial } from '../../lib/aiConnectionService';
 import { VisualShareModal, VisualShareData } from '../../components/memorial/VisualShareModal';
 import { ActionSheetModal, ActionSheetItem, ConfirmModal } from '../../components/ui';
-import { AtalaiaCrisisModal } from '../../components/memorial/AtalaiaCrisisModal';
-import { AtalaiaContactModal } from '../../components/memorial/AtalaiaContactModal';
+import { triggerGlobalAtalaiaCrisis } from '../../lib/atalaiaCrisisManager';
 import { classifyPastoralIntentLocally } from '../../lib/classifierJEV';
-import { fetchCurrentPastoralContact, sendPastoralEcosystemEmail } from '../../lib/atalaiaStore';
+import { fetchCurrentPastoralContact } from '../../lib/atalaiaStore';
 import { PastoralContact } from '../../lib/atalaiaTypes';
 
 // ─── Chip de referência bíblica ───────────────────────────────────────────────
@@ -651,19 +650,21 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
     return res.intent === 'CRISIS';
   }, [currentEntry.content, currentEntry.title, currentEntry.category]);
 
-  const [crisisModalVisible, setCrisisModalVisible] = useState(isCrisisEntry);
   const [pastoralContact, setPastoralContact] = useState<PastoralContact | null>(null);
-  const [atalaiaContactModalVisible, setAtalaiaContactModalVisible] = useState(false);
-
-  useEffect(() => {
-    if (isCrisisEntry) {
-      setCrisisModalVisible(true);
-    }
-  }, [isCrisisEntry]);
 
   useEffect(() => {
     fetchCurrentPastoralContact().then(setPastoralContact).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (isCrisisEntry) {
+      triggerGlobalAtalaiaCrisis({
+        noteId: currentEntry.id,
+        pastorName: pastoralContact?.name,
+        hasActivePastor: Boolean(pastoralContact?.email),
+      });
+    }
+  }, [isCrisisEntry, pastoralContact?.name, pastoralContact?.email, currentEntry.id]);
 
   const cfg = CATEGORY_CONFIG[currentEntry.category];
   const s = useMemo(() => getMarcoStyles(colors, isDark), [colors, isDark]);
@@ -886,7 +887,13 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
         {isCrisisEntry && (
           <TouchableOpacity
             style={s.crisisSupportCard}
-            onPress={() => setCrisisModalVisible(true)}
+            onPress={() =>
+              triggerGlobalAtalaiaCrisis({
+                noteId: currentEntry.id,
+                pastorName: pastoralContact?.name,
+                hasActivePastor: Boolean(pastoralContact?.email),
+              })
+            }
             activeOpacity={0.85}
             accessibilityRole="button"
             accessibilityLabel="Acolhimento Atalaia. Ligue no CVV 188 ou acione apoio pastoral."
@@ -1065,37 +1072,6 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
         cancelLabel=""
         destructive={infoModal.destructive}
         onConfirm={() => setInfoModal((prev) => ({ ...prev, visible: false }))}
-      />
-
-      {/* ── Modal Imediato de Acolhimento e Apoio à Vida ── */}
-      <AtalaiaCrisisModal
-        visible={crisisModalVisible}
-        onClose={() => setCrisisModalVisible(false)}
-        pastorName={pastoralContact?.name}
-        hasActivePastor={Boolean(pastoralContact?.email)}
-        onConfigurePastor={() => {
-          setCrisisModalVisible(false);
-          setAtalaiaContactModalVisible(true);
-        }}
-        onSendPastoralAlert={async () => {
-          if (currentEntry.id) {
-            await sendPastoralEcosystemEmail({
-              type: 'CRISIS',
-              noteId: currentEntry.id,
-            });
-          }
-        }}
-      />
-
-      {/* ── Modal de Configuração Pastoral Atalaia ── */}
-      <AtalaiaContactModal
-        visible={atalaiaContactModalVisible}
-        onClose={() => setAtalaiaContactModalVisible(false)}
-        currentContact={pastoralContact}
-        onContactUpdated={async () => {
-          const contact = await fetchCurrentPastoralContact();
-          setPastoralContact(contact);
-        }}
       />
     </View>
   );

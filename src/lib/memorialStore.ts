@@ -534,6 +534,24 @@ async function runSyncMemorials(): Promise<{
   }
 }
 
+// ─── Listeners de Salvamento de Memoriais (Ecossistema Atalaia) ───────────────
+type MemorialSavedListener = (entry: MemorialEntry) => void;
+let memorialSavedListener: MemorialSavedListener | null = null;
+
+export function setOnMemorialSavedListener(listener: MemorialSavedListener) {
+  memorialSavedListener = listener;
+}
+
+function notifyMemorialSaved(entry: MemorialEntry) {
+  if (memorialSavedListener) {
+    try {
+      memorialSavedListener(entry);
+    } catch (e) {
+      console.warn('[memorialStore] Erro no listener pós-salvamento:', e);
+    }
+  }
+}
+
 /**
  * Salva um novo marco de fé (Local-First com upload em segundo plano).
  */
@@ -597,6 +615,7 @@ async function saveUserMemorialUnlocked(
         await writePendingQueue(currentQueue.filter((q) => q.id !== tempId));
 
         notifySyncListeners({ status: 'synced' });
+        notifyMemorialSaved(cloudEntry);
         return cloudEntry;
       }
     } catch (e) {
@@ -605,6 +624,7 @@ async function saveUserMemorialUnlocked(
   }
 
   notifySyncListeners({ status: user ? 'pending' : 'local_only' });
+  notifyMemorialSaved(newEntry);
   return newEntry;
 }
 

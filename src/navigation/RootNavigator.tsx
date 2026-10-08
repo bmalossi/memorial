@@ -19,7 +19,10 @@ import {
   setNotificationNavigationHandler,
   subscribeToNotificationResponse,
 } from '../lib/notificationService';
+import * as Notifications from 'expo-notifications';
 import { fetchUserMemorials } from '../lib/memorialStore';
+import { GlobalAtalaiaCrisisModal } from '../components/memorial/GlobalAtalaiaCrisisModal';
+import { triggerGlobalAtalaiaCrisis } from '../lib/atalaiaCrisisManager';
 
 export type AuthStackParamList = {
   Login:          { justRegistered?: boolean; alreadyRegistered?: boolean; registeredEmail?: string } | undefined;
@@ -100,6 +103,17 @@ export function RootNavigator() {
 
     const unsubscribeNotifications = subscribeToNotificationResponse();
 
+    // 1b. Checa se o app foi aberto diretamente de uma notificação de acolhimento do sistema (cold start)
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      const data = response?.notification?.request?.content?.data as Record<string, any> | undefined;
+      if (data?.type === 'atalaia_crisis') {
+        triggerGlobalAtalaiaCrisis({
+          noteId: typeof data.noteId === 'string' ? data.noteId : undefined,
+          pastorName: typeof data.pastorName === 'string' ? data.pastorName : undefined,
+        });
+      }
+    }).catch(() => {});
+
     // 2. Checa a sessão persistida no AsyncStorage
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -176,6 +190,9 @@ export function RootNavigator() {
           )}
         </RootStack.Navigator>
       </NavigationContainer>
+
+      {/* ── Modal Global de Acolhimento e Apoio à Vida (Atalaia) ── */}
+      <GlobalAtalaiaCrisisModal />
     </>
   );
 }

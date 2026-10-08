@@ -17,7 +17,8 @@ LogBox.ignoreLogs([
 
 // ─── Chaves de Armazenamento e Constantes ──────────────────────────────────────
 const STORAGE_KEY_SETTINGS = '@memorial_notification_settings_v1';
-const MEMORIAL_CHANNEL_ID = 'memorial-diario';
+export const MEMORIAL_CHANNEL_ID = 'memorial-diario';
+export const ATALAIA_CHANNEL_ID = 'atalaia-cuidado-urgente';
 const NOTIFICATION_IDENTIFIER_DAILY = 'memorial_daily_reminder';
 
 export function isExpoGoClient(): boolean {
@@ -71,7 +72,7 @@ export function initNotificationHandler() {
 }
 
 /**
- * Cria canal de notificação no Android com alta prioridade e acento âmbar.
+ * Cria canais de notificação no Android com alta prioridade e acento âmbar.
  */
 export async function setupNotificationChannel(): Promise<void> {
   // No Expo Go no Android, o NotificationsChannelsProvider foi descontinuado pela Expo,
@@ -91,8 +92,17 @@ export async function setupNotificationChannel(): Promise<void> {
         lightColor: '#D9B463',
         sound: 'default',
       });
+
+      await Notifications.setNotificationChannelAsync(ATALAIA_CHANNEL_ID, {
+        name: 'Acolhimento Atalaia · Apoio à Vida',
+        description: 'Apoio imediato, canais de escuta, suporte pastoral e discagem CVV 188',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 200, 250],
+        lightColor: '#E7B075',
+        sound: 'default',
+      });
     } catch (err: any) {
-      console.log('[NotificationService] Aviso ao configurar canal:', err?.message || err);
+      console.log('[NotificationService] Aviso ao configurar canais:', err?.message || err);
     }
   }
 }
@@ -380,6 +390,63 @@ export async function triggerInstantTestReminder(entries: MemorialEntry[]): Prom
   }
 }
 
+/**
+ * Dispara notificação nativa imediata de acolhimento e apoio à vida no aparelho.
+ * Funciona mesmo se o usuário fechar o aplicativo ou bloquear o celular.
+ */
+export async function scheduleAtalaiaCrisisNotification(options: {
+  noteId?: string;
+  pastorName?: string;
+  customTitle?: string;
+  customBody?: string;
+}): Promise<string | null> {
+  try {
+    const hasPerm = await requestNotificationPermission();
+    if (!hasPerm) {
+      console.log('[NotificationService] Permissão de notificação não concedida para acolhimento Atalaia.');
+      return null;
+    }
+
+    await setupNotificationChannel();
+
+    const pastorPart = options.pastorName?.trim()
+      ? ` ou falar com o Pr. ${options.pastorName.trim()}`
+      : '';
+
+    const title = options.customTitle || 'Você não está sozinho · Memorial Atalaia';
+    const body =
+      options.customBody ||
+      `Estamos com você neste momento. Toque para ver canais de apoio, ligar para o CVV 188${pastorPart}.`;
+
+    const identifier = await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        sound: 'default',
+        color: '#E7B075',
+        priority: Notifications.AndroidNotificationPriority.MAX,
+        data: {
+          type: 'atalaia_crisis',
+          noteId: options.noteId,
+          pastorName: options.pastorName,
+        },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 1,
+        repeats: false,
+        ...(isRunningInExpoGo() ? {} : { channelId: ATALAIA_CHANNEL_ID }),
+      },
+    });
+
+    console.log(`[NotificationService] Notificação de acolhimento Atalaia enviada ao sistema (ID: ${identifier})`);
+    return identifier;
+  } catch (err: any) {
+    console.log('[NotificationService] Erro ao disparar notificação nativa de acolhimento Atalaia:', err?.message || err);
+    return null;
+  }
+}
+
 // ─── 7. Listener de Toque na Notificação ──────────────────────────────────────
 
 type NotificationTapHandler = (entryId: string) => void;
@@ -392,6 +459,19 @@ export function setNotificationNavigationHandler(handler: NotificationTapHandler
 export function subscribeToNotificationResponse(): () => void {
   const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response?.notification?.request?.content?.data;
+    if (data?.type === 'atalaia_crisis') {
+      try {
+        const { triggerGlobalAtalaiaCrisis } = require('./atalaiaCrisisManager');
+        triggerGlobalAtalaiaCrisis({
+          noteId: data.noteId,
+          pastorName: data.pastorName,
+        });
+      } catch (e) {
+        console.log('[NotificationService] Erro ao acionar modal de crise via notificação:', e);
+      }
+      return;
+    }
+
     if (typeof data?.entryId === 'string' && globalTapHandler) {
       globalTapHandler(data.entryId);
     }
