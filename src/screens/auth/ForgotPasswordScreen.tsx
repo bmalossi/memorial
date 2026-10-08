@@ -55,12 +55,19 @@ export function ForgotPasswordScreen({ navigation }: Props) {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
       if (error) {
-        setGlobalErr(error.message || 'Não foi possível solicitar a recuperação de senha.');
+        const msg = (error.message || '').toLowerCase();
+        if (msg.includes('rate limit') || msg.includes('too many requests')) {
+          setGlobalErr('Muitas tentativas em pouco tempo. Por favor, aguarde alguns instantes.');
+        } else if (msg.includes('network') || msg.includes('connection') || msg.includes('fetch')) {
+          setGlobalErr('Falha de conexão com a internet. Verifique seu sinal.');
+        } else {
+          setGlobalErr('Não foi possível enviar o link de redefinição no momento. Tente novamente em instantes.');
+        }
         return;
       }
       setSent(true);
     } catch {
-      setGlobalErr('Falha de conexão. Verifique seu sinal e tente novamente.');
+      setGlobalErr('Falha de conexão com a internet. Verifique seu sinal e tente novamente.');
     } finally {
       setLoading(false);
     }

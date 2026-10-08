@@ -153,10 +153,10 @@ export function AtalaiaContactModal({
           buttonText: 'Voltar',
         });
       }
-    } catch (err: any) {
+    } catch {
       showFeedback({
         title: 'Não foi possível enviar',
-        message: err?.message || 'Erro inesperado ao solicitar conversa.',
+        message: 'Falha de conexão com a internet. Verifique seu sinal e tente novamente.',
         icon: 'alert-circle',
         buttonText: 'Voltar',
       });
@@ -204,8 +204,8 @@ export function AtalaiaContactModal({
           },
         });
       }
-    } catch (e: any) {
-      setErrorMessage(e?.message || 'Erro inesperado ao enviar convite.');
+    } catch {
+      setErrorMessage('Não foi possível enviar o convite no momento. Tente novamente em instantes.');
     } finally {
       setIsSubmitting(false);
     }
@@ -232,10 +232,10 @@ export function AtalaiaContactModal({
           buttonText: 'Voltar',
         });
       }
-    } catch (e: any) {
+    } catch {
       showFeedback({
         title: 'Falha no Reenvio',
-        message: e?.message || 'Erro inesperado ao reenviar.',
+        message: 'Não foi possível reenviar o convite no momento. Tente novamente em instantes.',
         icon: 'alert-circle',
         buttonText: 'Voltar',
       });

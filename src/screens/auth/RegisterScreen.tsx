@@ -227,17 +227,17 @@ export function RegisterScreen({ navigation }: Props) {
 
       if (error) {
         const msg = error.message.toLowerCase();
-        let userMessage = error.message || 'Não foi possível concluir o cadastro.';
+        let userMessage = 'Não foi possível concluir o cadastro no momento. Por favor, tente novamente em instantes.';
         if (msg.includes('already registered') || msg.includes('user already exists')) {
-          userMessage = 'Este e-mail já possui conta no Bíblia Vive. Faça login para entrar.';
+          userMessage = 'Este e-mail já possui conta cadastrada. Faça login para entrar.';
         } else if (msg.includes('sending confirmation email') || msg.includes('sending signup email')) {
-          userMessage = 'Não foi possível enviar o e-mail de confirmação no momento. Verifique as configurações de SMTP no Supabase ou tente novamente.';
+          userMessage = 'Não foi possível enviar o e-mail de confirmação no momento. Por favor, tente novamente em instantes.';
         } else if (msg.includes('rate limit') || msg.includes('too many requests')) {
           userMessage = 'Muitas tentativas em pouco tempo. Aguarde alguns instantes.';
         } else if (msg.includes('network') || msg.includes('connection') || msg.includes('fetch')) {
           userMessage = 'Falha de conexão com a internet. Verifique seu sinal.';
         }
-        setGlobalErr(userMessage);
+        setGlobalErr('');
         setFeedbackDialog({
           visible: true,
           title: 'Aviso de Cadastro',
@@ -299,8 +299,15 @@ export function RegisterScreen({ navigation }: Props) {
         return;
       }
       // Se retornou sessão direta (confirmação automática desativada), onAuthStateChange assumirá o redirecionamento
-    } catch (err: any) {
-      setGlobalErr('Falha de conexão com a internet. Verifique seu sinal.');
+    } catch {
+      setGlobalErr('');
+      setFeedbackDialog({
+        visible: true,
+        title: 'Aviso de Conexão',
+        message: 'Falha de conexão com a internet. Verifique seu sinal e tente novamente.',
+        icon: 'alert-circle',
+        buttonText: 'Entendido',
+      });
     } finally {
       setLoading(false);
     }
@@ -312,10 +319,22 @@ export function RegisterScreen({ navigation }: Props) {
     try {
       const res = await initiateGoogleOAuth();
       if (!res.success && res.error) {
-        setGlobalErr(res.error);
+        setFeedbackDialog({
+          visible: true,
+          title: 'Aviso',
+          message: 'Não foi possível concluir o cadastro com o Google no momento.',
+          icon: 'alert-circle',
+          buttonText: 'Entendido',
+        });
       }
     } catch {
-      setGlobalErr('Não foi possível iniciar o cadastro com o Google.');
+      setFeedbackDialog({
+        visible: true,
+        title: 'Aviso',
+        message: 'Não foi possível iniciar o cadastro com o Google.',
+        icon: 'alert-circle',
+        buttonText: 'Entendido',
+      });
     } finally {
       setGoogleLoading(false);
     }

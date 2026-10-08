@@ -100,7 +100,7 @@ export async function initiateGoogleOAuth(): Promise<{ success: boolean; error?:
     });
 
     if (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: 'Não foi possível conectar ao Google no momento.' };
     }
 
     if (data?.url) {
@@ -113,8 +113,8 @@ export async function initiateGoogleOAuth(): Promise<{ success: boolean; error?:
       }
     }
 
-    return { success: false, error: 'URL de autenticação do Google não fornecida.' };
-  } catch (err: any) {
-    return { success: false, error: err?.message || 'Erro ao conectar ao Google.' };
+    return { success: false, error: 'Não foi possível iniciar o login com o Google.' };
+  } catch {
+    return { success: false, error: 'Não foi possível conectar ao Google no momento.' };
   }
 }

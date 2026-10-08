@@ -203,9 +203,9 @@ export function LoginScreen({ navigation, route }: Props) {
         if (msg.includes('invalid login credentials') || msg.includes('invalid_grant')) {
           setPwErr('E-mail ou senha incorretos.');
         } else if (msg.includes('email not confirmed')) {
-          setEmailErr('E-mail ainda não confirmado no Bíblia Vive.');
+          setEmailErr('E-mail ainda não confirmado. Verifique sua caixa de entrada.');
         } else if (msg.includes('rate limit') || msg.includes('too many requests')) {
-          setPwErr('Muitas tentativas. Aguarde alguns instantes.');
+          setPwErr('Muitas tentativas em pouco tempo. Por favor, aguarde alguns instantes.');
         } else if (msg.includes('network') || msg.includes('connection') || msg.includes('fetch')) {
           setPwErr('Falha de conexão com a internet. Verifique seu sinal.');
         } else {
@@ -220,7 +220,7 @@ export function LoginScreen({ navigation, route }: Props) {
       } else {
         await clearSavedCredentials();
       }
-    } catch (err: any) {
+    } catch {
       setPwErr('Falha de conexão com a internet. Verifique seu sinal.');
     } finally {
       setLoading(false);
@@ -234,7 +234,7 @@ export function LoginScreen({ navigation, route }: Props) {
     try {
       const res = await initiateGoogleOAuth();
       if (!res.success && res.error) {
-        setPwErr(res.error);
+        setPwErr('Não foi possível concluir o login com o Google no momento.');
       }
     } catch {
       setPwErr('Não foi possível iniciar o login com o Google.');

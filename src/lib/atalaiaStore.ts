@@ -112,7 +112,7 @@ export async function sendPastoralInvitation(
 
   if (error) {
     console.error('[AtalaiaStore] Falha ao cadastrar contato:', error.message);
-    return { success: false, error: error.message };
+    return { success: false, error: 'Não foi possível cadastrar o contato no momento. Tente novamente em instantes.' };
   }
 
   return { success: true, contact: data as PastoralContact };
@@ -157,7 +157,7 @@ export async function revokePastoralContact(
 
   if (error) {
     console.error('[AtalaiaStore] Falha ao revogar contato:', error.message);
-    return { success: false, error: error.message };
+    return { success: false, error: 'Não foi possível revogar o contato no momento. Tente novamente em instantes.' };
   }
 
   return { success: true };
