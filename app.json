@@ -22,7 +22,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "br.bibliavive.memorial",
-      "buildNumber": "6",
+      "buildNumber": "7",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "O Memorial usa o microfone para transcrever seus registros espirituais por voz.",
         "NSCameraUsageDescription": "O Memorial usa a câmera para adicionar imagens aos seus registros."
@@ -30,7 +30,7 @@
     },
     "android": {
       "package": "br.bibliavive.memorial",
-      "versionCode": 6,
+      "versionCode": 7,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#141210"

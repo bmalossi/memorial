@@ -11,6 +11,7 @@ import {
   StatusBar,
   TextInput,
   TouchableOpacity,
+  Pressable,
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -144,6 +145,19 @@ export function RegisterScreen({ navigation }: Props) {
   const [confirmPwErr, setConfirmPwErr]       = useState('');
   const [globalErr, setGlobalErr]             = useState('');
 
+  const [feedbackDialog, setFeedbackDialog]   = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    icon?: 'mail' | 'info' | 'alert-circle';
+    buttonText?: string;
+    onDismiss?: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+  });
+
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
@@ -213,15 +227,24 @@ export function RegisterScreen({ navigation }: Props) {
 
       if (error) {
         const msg = error.message.toLowerCase();
+        let userMessage = error.message || 'Não foi possível concluir o cadastro.';
         if (msg.includes('already registered') || msg.includes('user already exists')) {
-          setGlobalErr('Este e-mail já possui conta no Bíblia Vive. Faça login para entrar.');
+          userMessage = 'Este e-mail já possui conta no Bíblia Vive. Faça login para entrar.';
+        } else if (msg.includes('sending confirmation email') || msg.includes('sending signup email')) {
+          userMessage = 'Não foi possível enviar o e-mail de confirmação no momento. Verifique as configurações de SMTP no Supabase ou tente novamente.';
         } else if (msg.includes('rate limit') || msg.includes('too many requests')) {
-          setGlobalErr('Muitas tentativas em pouco tempo. Aguarde alguns instantes.');
+          userMessage = 'Muitas tentativas em pouco tempo. Aguarde alguns instantes.';
         } else if (msg.includes('network') || msg.includes('connection') || msg.includes('fetch')) {
-          setGlobalErr('Falha de conexão com a internet. Verifique seu sinal.');
-        } else {
-          setGlobalErr(error.message || 'Não foi possível concluir o cadastro.');
+          userMessage = 'Falha de conexão com a internet. Verifique seu sinal.';
         }
+        setGlobalErr(userMessage);
+        setFeedbackDialog({
+          visible: true,
+          title: 'Aviso de Cadastro',
+          message: userMessage,
+          icon: 'alert-circle',
+          buttonText: 'Entendido',
+        });
         return;
       }
 
@@ -237,23 +260,41 @@ export function RegisterScreen({ navigation }: Props) {
         setEmail('');
         setPassword('');
         setConfirmPassword('');
-        navigation?.navigate?.('Login', {
-          alreadyRegistered: true,
-          registeredEmail: cleanEmail,
+        setFeedbackDialog({
+          visible: true,
+          title: 'Conta Já Cadastrada',
+          message: `O e-mail ${cleanEmail} já possui cadastro unificado no Bíblia Vive e Memorial.\n\nVocê será direcionado para entrar com sua senha.`,
+          icon: 'info',
+          buttonText: 'Ir para o Login',
+          onDismiss: () => {
+            navigation?.navigate?.('Login', {
+              alreadyRegistered: true,
+              registeredEmail: cleanEmail,
+            });
+          },
         });
         return;
       }
 
       // Caso 2: Conta nova criada com sucesso requerendo confirmação de e-mail
-      // Redireciona o usuário para a tela inicial de Login com aviso de confirmação e e-mail preenchido
+      // Exibe diálogo nobre de confirmação e ao clicar direciona para a tela inicial de Login
       if (data?.user && !data?.session) {
         setName('');
         setEmail('');
         setPassword('');
         setConfirmPassword('');
-        navigation?.navigate?.('Login', {
-          justRegistered: true,
-          registeredEmail: cleanEmail,
+        setFeedbackDialog({
+          visible: true,
+          title: 'Confirmação Enviada',
+          message: `Enviamos o link de confirmação para ${cleanEmail}.\n\nAcesse sua caixa de entrada, confirme seu e-mail e faça login para entrar no Memorial.`,
+          icon: 'mail',
+          buttonText: 'Ir para o Login',
+          onDismiss: () => {
+            navigation?.navigate?.('Login', {
+              justRegistered: true,
+              registeredEmail: cleanEmail,
+            });
+          },
         });
         return;
       }
@@ -484,6 +525,61 @@ export function RegisterScreen({ navigation }: Props) {
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Diálogo Editorial de Feedback (Tema Memorial) */}
+      {feedbackDialog.visible && (
+        <View style={s.modalOverlay}>
+          <Pressable
+            style={s.overlayBackdrop}
+            onPress={() => {
+              const dismiss = feedbackDialog.onDismiss;
+              setFeedbackDialog((prev) => ({ ...prev, visible: false }));
+              dismiss?.();
+            }}
+          />
+          <View style={s.feedbackDialogBox}>
+            <View
+              style={[
+                s.feedbackIconBox,
+                feedbackDialog.icon === 'alert-circle'
+                  ? { backgroundColor: isDark ? '#3D1C1F' : '#FDE8E8' }
+                  : { backgroundColor: isDark ? '#2B261D' : '#F7EBDC' },
+              ]}
+            >
+              <Feather
+                name={
+                  feedbackDialog.icon === 'alert-circle'
+                    ? 'alert-circle'
+                    : feedbackDialog.icon === 'mail'
+                    ? 'mail'
+                    : 'info'
+                }
+                size={24}
+                color={
+                  feedbackDialog.icon === 'alert-circle'
+                    ? colors.error
+                    : colors.amber.DEFAULT
+                }
+              />
+            </View>
+            <Text style={s.feedbackTitle}>{feedbackDialog.title}</Text>
+            <Text style={s.feedbackMessage}>{feedbackDialog.message}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                const dismiss = feedbackDialog.onDismiss;
+                setFeedbackDialog((prev) => ({ ...prev, visible: false }));
+                dismiss?.();
+              }}
+              style={s.feedbackPrimaryBtn}
+              activeOpacity={0.8}
+            >
+              <Text style={s.feedbackPrimaryBtnText}>
+                {feedbackDialog.buttonText || 'Entendido'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </>
   );
 }
@@ -696,6 +792,76 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       fontSize:      typography.size.xs,
       letterSpacing: typography.tracking.wide,
       fontFamily:    Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    },
+
+    modalOverlay: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(0, 0, 0, 0.72)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: spacing['4'],
+      zIndex: 9999,
+      elevation: 25,
+    },
+    overlayBackdrop: {
+      ...StyleSheet.absoluteFill,
+    },
+    feedbackDialogBox: {
+      width: '100%',
+      maxWidth: 380,
+      backgroundColor: colors.bg.surface,
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      borderColor: colors.border.subtle,
+      padding: spacing['6'],
+      alignItems: 'center',
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.35,
+          shadowRadius: 16,
+        },
+        android: {
+          elevation: 10,
+        },
+      }),
+    },
+    feedbackIconBox: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing['3'],
+    },
+    feedbackTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.text.primary,
+      fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+      textAlign: 'center',
+      marginBottom: spacing['2'],
+    },
+    feedbackMessage: {
+      fontSize: 13.5,
+      lineHeight: 20,
+      color: colors.text.secondary,
+      textAlign: 'center',
+      marginBottom: spacing['5'],
+    },
+    feedbackPrimaryBtn: {
+      width: '100%',
+      backgroundColor: colors.amber.DEFAULT,
+      borderRadius: radius.md,
+      paddingVertical: 13,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    feedbackPrimaryBtnText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text.onAmber,
     },
   });
 }
