@@ -47,3 +47,40 @@ export function truncate(text: string, maxLen = 140): string {
   if (text.length <= maxLen) return text;
   return text.slice(0, maxLen).trimEnd() + '…';
 }
+
+/**
+ * Gera um título automático e solene para uma memória rápida a partir das primeiras palavras e da data.
+ * Evita cortes abruptos de palavras e mantém o padrão reverente do diário espiritual.
+ */
+export function generateAutoTitle(content: string, date: Date = new Date()): string {
+  const clean = (content || '').replace(/\s+/g, ' ').trim();
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const dateStr = `${day}/${month}`;
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const timeStr = `${hours}:${minutes}`;
+
+  if (!clean) {
+    return `Memória · ${dateStr} às ${timeStr}`;
+  }
+
+  // Captura até as primeiras 5 palavras ou cerca de 28 caracteres
+  const words = clean.split(' ').filter(Boolean);
+  const selectedWords: string[] = [];
+  let charCount = 0;
+
+  for (const word of words) {
+    if (selectedWords.length >= 5 || (charCount + word.length > 28 && selectedWords.length >= 2)) {
+      break;
+    }
+    selectedWords.push(word);
+    charCount += word.length + 1;
+  }
+
+  const baseTitle = selectedWords.join(' ').replace(/[,;:.!?]+$/, '');
+  const hasMore = words.length > selectedWords.length;
+  const prefix = hasMore ? `${baseTitle}…` : baseTitle;
+
+  return `${prefix} · ${dateStr}`;
+}

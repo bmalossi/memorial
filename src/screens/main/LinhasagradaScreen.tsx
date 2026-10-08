@@ -12,6 +12,8 @@ import {
   RefreshControl,
   TextInput,
   Animated,
+  KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -19,8 +21,9 @@ import { Feather } from '@expo/vector-icons';
 import { useTheme, colors, ColorTokens, typography, spacing, radius } from '../../theme';
 import { MemorialCard } from '../../components/memorial/MemorialCard';
 import { NovoRegistroSheet } from '../../components/memorial/NovoRegistroSheet';
-import { FAB } from '../../components/ui/FAB';
+import { BottomQuickCaptureBar } from '../../components/memorial/BottomQuickCaptureBar';
 import { MemorialEntry } from '../../lib/types';
+import { generateAutoTitle } from '../../lib/utils';
 import { MemorialCategory, supabase } from '../../lib/supabase';
 import { PastoralCareBanner } from '../../components/memorial/PastoralCareBanner';
 import { PastoralCareActionBanner } from '../../components/memorial/PastoralCareActionBanner';
@@ -742,15 +745,46 @@ function TimelineItem({
   onPress,
   onAnswer,
   isLast,
+  isNew,
 }: {
   entry:    MemorialEntry;
   onPress:  () => void;
   onAnswer?: () => void;
   isLast:   boolean;
+  isNew?:   boolean;
 }) {
   const { colors } = useTheme();
+  const enterAnim = useRef(new Animated.Value(isNew ? 0 : 1)).current;
+  const slideAnim = useRef(new Animated.Value(isNew ? 12 : 0)).current;
+
+  useEffect(() => {
+    if (isNew) {
+      Animated.parallel([
+        Animated.timing(enterAnim, {
+          toValue: 1,
+          duration: 320,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 280,
+          friction: 12,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [isNew]);
+
   return (
-    <View style={item.row}>
+    <Animated.View
+      style={[
+        item.row,
+        {
+          opacity: enterAnim,
+          transform: [{ translateY: slideAnim }],
+        },
+      ]}
+    >
       <View style={item.axis}>
         <View style={[item.line, { backgroundColor: colors.border.DEFAULT }, isLast && item.lineHidden]} />
         <TimelineNode />
@@ -762,7 +796,7 @@ function TimelineItem({
           onAnswer={onAnswer}
         />
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -807,6 +841,11 @@ export function LinhasagradaScreen({ navigation }: Props) {
   const [userInitial, setUserInitial] = useState('L');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [quickText, setQuickText] = useState('');
+  const [isQuickSubmitting, setIsQuickSubmitting] = useState(false);
+  const [sheetInitialContent, setSheetInitialContent] = useState('');
+  const [newlyCreatedId, setNewlyCreatedId] = useState<string | null>(null);
+  const flatListRef = useRef<FlatList>(null);
   const [syncInfo, setSyncInfo] = useState<SyncStateInfo>({
     status: 'local_only',
     lastSyncTime: null,
@@ -996,11 +1035,49 @@ export function LinhasagradaScreen({ navigation }: Props) {
     navigation?.navigate?.('MarcoDetalhe', { entry });
   };
 
-  const handleOpenSheet = () => setSheetVisible(true);
+  const handleOpenSheet = () => {
+    setSheetInitialContent(quickText);
+    setSheetVisible(true);
+  };
+
+  const handleOpenSheetFromQuick = () => {
+    setSheetInitialContent(quickText);
+    setSheetVisible(true);
+  };
+
+  const handleQuickRegister = async () => {
+    const trimmed = quickText.trim();
+    if (!trimmed || isQuickSubmitting) return;
+
+    setIsQuickSubmitting(true);
+    Keyboard.dismiss();
+
+    const autoTitle = generateAutoTitle(trimmed);
+    const entryPayload: Omit<MemorialEntry, 'id' | 'created_at'> = {
+      title: autoTitle,
+      content: trimmed,
+      category: 'reflexao',
+      is_answered: false,
+      tags: [],
+      ai_status: 'none',
+    };
+
+    setQuickText('');
+
+    try {
+      await handleSaveNewEntry(entryPayload);
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    } catch (err) {
+      console.warn('[Linhasagrada] Erro ao registrar rapidamente:', err);
+    } finally {
+      setIsQuickSubmitting(false);
+    }
+  };
 
   const handleSaveNewEntry = async (data: Omit<MemorialEntry, 'id' | 'created_at'>) => {
     try {
       const saved = await saveUserMemorial(data);
+      setNewlyCreatedId(saved.id);
       setEntries((prev) => [saved, ...prev.filter((e) => e.id !== saved.id)]);
 
       // Mapeamento teológico assíncrono em background (OpenAI + TypeSafe JEV)
@@ -1082,6 +1159,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
         created_at: new Date().toISOString(),
         ai_status: 'none',
       };
+      setNewlyCreatedId(fallback.id);
       setEntries((prev) => [fallback, ...prev]);
     }
   };
@@ -1370,6 +1448,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
         </View>
       ) : filtered.length === 0 ? (
         <FlatList
+          ref={flatListRef}
           data={[]}
           renderItem={null}
           ListHeaderComponent={
@@ -1403,6 +1482,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
         />
       ) : (
         <FlatList
+          ref={flatListRef}
           data={filtered}
           keyExtractor={(e) => e.id}
           ListHeaderComponent={<ListHeader />}
@@ -1416,6 +1496,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
                   : undefined
               }
               isLast={index === filtered.length - 1}
+              isNew={entry.id === newlyCreatedId}
             />
           )}
           refreshControl={
@@ -1433,12 +1514,42 @@ export function LinhasagradaScreen({ navigation }: Props) {
         />
       )}
 
-      <FAB onPress={handleOpenSheet} />
+      {/* Caixa de Captura Rápida Docked no Rodapé */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 84 : 0}
+        style={ls.bottomDockContainer}
+        pointerEvents="box-none"
+      >
+        <BottomQuickCaptureBar
+          value={quickText}
+          onChangeText={setQuickText}
+          onSubmit={handleQuickRegister}
+          onOpenFullSheet={handleOpenSheetFromQuick}
+          onError={(title, message) => {
+            setFeedbackDialog({
+              visible: true,
+              title,
+              message,
+              icon: 'alert-circle',
+            });
+          }}
+          isSubmitting={isQuickSubmitting}
+        />
+      </KeyboardAvoidingView>
 
       <NovoRegistroSheet
         visible={sheetVisible}
-        onClose={() => setSheetVisible(false)}
-        onSave={handleSaveNewEntry}
+        onClose={() => {
+          setSheetVisible(false);
+          setSheetInitialContent('');
+        }}
+        onSave={(data) => {
+          setQuickText('');
+          setSheetInitialContent('');
+          handleSaveNewEntry(data);
+        }}
+        initialContent={sheetInitialContent}
       />
 
       <AtalaiaContactModal
@@ -1523,7 +1634,14 @@ const ls = StyleSheet.create({
     fontStyle: 'italic',
   },
   listContent: {
-    paddingBottom: 120,
+    paddingBottom: 140,
+  },
+  bottomDockContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
   },
   listHeader: {
     paddingTop: spacing['4'],
