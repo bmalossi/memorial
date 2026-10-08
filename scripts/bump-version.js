@@ -61,6 +61,19 @@ pkgJson.version = newVersion;
 fs.writeFileSync(appJsonPath, JSON.stringify(appJson, null, 2) + '\n');
 fs.writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
 
+// Atualizar src/version.ts para import estático no React Native
+const versionTsPath = path.resolve(__dirname, '../src/version.ts');
+const versionTsContent = `/**
+ * version.ts — Gerado automaticamente por scripts/bump-version.js
+ * NÃO edite manualmente. Use: npm run bump:build
+ */
+
+export const APP_VERSION = '${newVersion}';
+export const APP_BUILD = ${newCode};
+export const APP_VERSION_LABEL = 'v${newVersion} (Build ${newCode})';
+`;
+fs.writeFileSync(versionTsPath, versionTsContent);
+
 console.log('----------------------------------------------------');
 console.log('🚀 Versionamento Mobile Atualizado com Sucesso:');
 console.log(`   Modo:          ${mode.toUpperCase()}`);

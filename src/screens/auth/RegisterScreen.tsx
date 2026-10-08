@@ -18,6 +18,7 @@ import { Feather } from '@expo/vector-icons';
 import { useTheme, typography, spacing, radius, ColorTokens } from '../../theme';
 import { supabase } from '../../lib/supabase';
 import { initiateGoogleOAuth } from '../../lib/authOAuthService';
+import { APP_VERSION_LABEL } from '../../version';
 
 const { width: W } = Dimensions.get('window');
 
@@ -488,6 +489,11 @@ export function RegisterScreen({ navigation }: Props) {
                   <Text style={s.loginLink}>Entrar</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Versionamento Mobile */}
+              <View style={s.versionWrap}>
+                <Text style={s.versionText}>{APP_VERSION_LABEL}</Text>
+              </View>
             </View>
           </Animated.View>
         </ScrollView>
@@ -717,6 +723,20 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       color: colors.amber.DEFAULT,
       fontSize: typography.size.sm,
       fontWeight: typography.weight.semibold,
+    },
+
+    versionWrap: {
+      alignItems:     'center',
+      justifyContent: 'center',
+      marginTop:      spacing['5'],
+      paddingBottom:  spacing['2'],
+    },
+
+    versionText: {
+      color:         colors.text.muted,
+      fontSize:      typography.size.xs,
+      letterSpacing: typography.tracking.wide,
+      fontFamily:    Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
   });
 }

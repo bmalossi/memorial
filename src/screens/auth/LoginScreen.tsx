@@ -24,6 +24,7 @@ import {
   clearSavedCredentials,
 } from '../../lib/authCredentialsStore';
 import { initiateGoogleOAuth } from '../../lib/authOAuthService';
+import { APP_VERSION_LABEL } from '../../version';
 
 const { width: W } = Dimensions.get('window');
 
@@ -452,6 +453,11 @@ export function LoginScreen({ navigation, route }: Props) {
                 </TouchableOpacity>
               </View>
 
+              {/* Versionamento Mobile */}
+              <View style={s.versionWrap}>
+                <Text style={s.versionText}>{APP_VERSION_LABEL}</Text>
+              </View>
+
             </View>
           </Animated.View>
         </ScrollView>
@@ -694,6 +700,20 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       color:      colors.text.link,
       fontSize:   typography.size.sm,
       fontWeight: typography.weight.bold,
+    },
+
+    versionWrap: {
+      alignItems:     'center',
+      justifyContent: 'center',
+      marginTop:      spacing['5'],
+      paddingBottom:  spacing['2'],
+    },
+
+    versionText: {
+      color:         colors.text.muted,
+      fontSize:      typography.size.xs,
+      letterSpacing: typography.tracking.wide,
+      fontFamily:    Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
   });
 }
