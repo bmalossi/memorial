@@ -399,6 +399,22 @@ async function runSyncMemorials(): Promise<{
               await writeLocalCache(updated);
             }
 
+          } else if (item.action === 'update' && item.entry) {
+            const payload = buildSupabaseNotePayload(user.id, item.entry);
+            const { error: updateErr } = await supabase
+              .from('user_notes')
+              .update(payload)
+              .eq('id', item.id)
+              .eq('user_id', user.id);
+
+            if (updateErr) throw updateErr;
+
+            const cached = await readLocalCache();
+            const updated = cached.map((c) =>
+              c.id === item.id ? { ...c, sync_status: 'synced' as SyncStatus } : c
+            );
+            await writeLocalCache(updated);
+
           } else if (item.action === 'mark_answered') {
             await supabase
               .from('user_notes')
@@ -626,6 +642,90 @@ async function saveUserMemorialUnlocked(
   notifySyncListeners({ status: user ? 'pending' : 'local_only' });
   notifyMemorialSaved(newEntry);
   return newEntry;
+}
+
+/**
+ * Atualiza um marco de fé existente (Local-First com envio em segundo plano).
+ * Permite editar título, relato, categoria, referências bíblicas e tags.
+ */
+export function updateUserMemorial(
+  id: string,
+  updatedData: Partial<MemorialEntry>
+): Promise<MemorialEntry> {
+  return withStoreLock(() => updateUserMemorialUnlocked(id, updatedData));
+}
+
+async function updateUserMemorialUnlocked(
+  id: string,
+  updatedData: Partial<MemorialEntry>
+): Promise<MemorialEntry> {
+  const now = new Date().toISOString();
+
+  // 1. Atualiza cache local imediatamente
+  const cached = await readLocalCache();
+  const existingIndex = cached.findIndex((e) => e.id === id);
+  if (existingIndex === -1) {
+    throw new Error('Marco não encontrado no cache local.');
+  }
+
+  const existing = cached[existingIndex];
+  const mergedEntry: MemorialEntry = {
+    ...existing,
+    ...updatedData,
+    id: existing.id,
+    created_at: existing.created_at,
+    sync_status: 'pending',
+  };
+
+  const updatedCache = [...cached];
+  updatedCache[existingIndex] = mergedEntry;
+  await writeLocalCache(updatedCache);
+
+  // 2. Enfileira pendência na fila offline
+  await enqueuePendingAction({
+    action: 'update',
+    id,
+    entry: mergedEntry,
+    createdAt: now,
+  });
+
+  // 3. Tenta envio imediato se estiver conectado
+  const { data: sessionData } = await supabase.auth.getSession();
+  const user = sessionData?.session?.user;
+
+  if (user && !id.startsWith('local_')) {
+    try {
+      const payload = buildSupabaseNotePayload(user.id, mergedEntry);
+      const { error: updateErr } = await supabase
+        .from('user_notes')
+        .update(payload)
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (!updateErr) {
+        const reCached = await readLocalCache();
+        const finalCache = reCached.map((item) =>
+          item.id === id ? { ...item, sync_status: 'synced' as SyncStatus } : item
+        );
+        await writeLocalCache(finalCache);
+
+        const currentQueue = await readPendingQueue();
+        await writePendingQueue(
+          currentQueue.filter((q) => !(q.id === id && q.action === 'update'))
+        );
+
+        notifySyncListeners({ status: 'synced' });
+        notifyMemorialSaved(mergedEntry);
+        return { ...mergedEntry, sync_status: 'synced' };
+      }
+    } catch (e) {
+      console.log('[Memorial] Falha no update imediato, mantido na fila offline:', e);
+    }
+  }
+
+  notifySyncListeners({ status: user ? 'pending' : 'local_only' });
+  notifyMemorialSaved(mergedEntry);
+  return mergedEntry;
 }
 
 /**

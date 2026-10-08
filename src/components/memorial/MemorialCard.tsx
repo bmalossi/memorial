@@ -17,9 +17,10 @@ interface Props {
   entry:     MemorialEntry;
   onPress:   () => void;
   onAnswer?: () => void;
+  onEdit?:   () => void;
 }
 
-export function MemorialCard({ entry, onPress, onAnswer }: Props) {
+export function MemorialCard({ entry, onPress, onAnswer, onEdit }: Props) {
   const { colors, isDark } = useTheme();
   const cfg = CATEGORY_CONFIG[entry.category];
   const scale = useRef(new Animated.Value(1)).current;
@@ -61,10 +62,23 @@ export function MemorialCard({ entry, onPress, onAnswer }: Props) {
         accessibilityLabel={`${cfg.label}: ${entry.title ?? entry.content.slice(0, 40)}`}
         style={s.card}
       >
-        {/* Topo: Categoria e Data */}
+        {/* Topo: Categoria e Data com Ação de Edição */}
         <View style={s.header}>
           <Text style={s.categoryLabel}>{cfg.tag}</Text>
-          <Text style={s.dateText}>{relativeDate(entry.created_at)}</Text>
+          <View style={s.headerRight}>
+            <Text style={s.dateText}>{relativeDate(entry.created_at)}</Text>
+            {onEdit && (
+              <TouchableOpacity
+                onPress={onEdit}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={s.editBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Editar esta memória"
+              >
+                <Feather name="edit-2" size={12.5} color={colors.text.muted} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* Referência bíblica */}
@@ -164,6 +178,16 @@ function getCardStyles(colors: ColorTokens, isDark: boolean) {
     dateText: {
       color:    colors.text.muted,
       fontSize: 12,
+    },
+
+    headerRight: {
+      flexDirection: 'row',
+      alignItems:    'center',
+      gap:           8,
+    },
+
+    editBtn: {
+      padding: 2,
     },
 
     bibleRef: {

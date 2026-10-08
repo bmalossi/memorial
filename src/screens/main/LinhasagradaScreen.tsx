@@ -40,6 +40,7 @@ import {
   fetchUserMemorials,
   syncMemorialsWithSupabase,
   saveUserMemorial,
+  updateUserMemorial,
   markPrayerAnsweredInSupabase,
   updateMemorialPastoralIntent,
   subscribeToSyncState,
@@ -744,12 +745,14 @@ function TimelineItem({
   entry,
   onPress,
   onAnswer,
+  onEdit,
   isLast,
   isNew,
 }: {
   entry:    MemorialEntry;
   onPress:  () => void;
   onAnswer?: () => void;
+  onEdit?:   () => void;
   isLast:   boolean;
   isNew?:   boolean;
 }) {
@@ -794,6 +797,7 @@ function TimelineItem({
           entry={entry}
           onPress={onPress}
           onAnswer={onAnswer}
+          onEdit={onEdit}
         />
       </View>
     </Animated.View>
@@ -838,6 +842,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<Filter>('todos');
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<MemorialEntry | null>(null);
   const [userInitial, setUserInitial] = useState('L');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -1072,13 +1077,40 @@ export function LinhasagradaScreen({ navigation }: Props) {
   };
 
   const handleOpenSheet = () => {
+    setEditingEntry(null);
     setSheetInitialContent(quickText);
     setSheetVisible(true);
   };
 
   const handleOpenSheetFromQuick = () => {
+    setEditingEntry(null);
     setSheetInitialContent(quickText);
     setSheetVisible(true);
+  };
+
+  const handleEditEntry = (entry: MemorialEntry) => {
+    setEditingEntry(entry);
+    setSheetVisible(true);
+  };
+
+  const handleUpdateExistingEntry = async (data: Omit<MemorialEntry, 'id' | 'created_at'>) => {
+    if (!editingEntry) return;
+    const targetId = editingEntry.id;
+    try {
+      const updated = await updateUserMemorial(targetId, data);
+      setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+    } catch (e) {
+      console.warn('Erro ao atualizar marco:', e);
+      setEntries((prev) =>
+        prev.map((e) =>
+          e.id === targetId
+            ? { ...e, ...data }
+            : e
+        )
+      );
+    } finally {
+      setEditingEntry(null);
+    }
   };
 
   const handleQuickRegister = async () => {
@@ -1530,6 +1562,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
             <TimelineItem
               entry={entry}
               onPress={() => handleCardPress(entry)}
+              onEdit={() => handleEditEntry(entry)}
               onAnswer={
                 entry.category === 'oracao' && !entry.is_answered
                   ? () => handleMarkAnswered(entry.id)
@@ -1586,13 +1619,20 @@ export function LinhasagradaScreen({ navigation }: Props) {
         onClose={() => {
           setSheetVisible(false);
           setSheetInitialContent('');
+          setEditingEntry(null);
         }}
         onSave={(data) => {
-          setQuickText('');
-          setSheetInitialContent('');
-          handleSaveNewEntry(data);
+          if (editingEntry) {
+            handleUpdateExistingEntry(data);
+          } else {
+            setQuickText('');
+            setSheetInitialContent('');
+            handleSaveNewEntry(data);
+          }
         }}
         initialContent={sheetInitialContent}
+        mode={editingEntry ? 'edit' : 'create'}
+        editingEntry={editingEntry}
       />
 
       <AtalaiaContactModal

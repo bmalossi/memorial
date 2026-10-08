@@ -37,11 +37,14 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   onSave: (entry: Omit<MemorialEntry, 'id' | 'created_at'>) => void;
+  mode?: 'create' | 'edit';
+  editingEntry?: MemorialEntry | null;
   initialCategory?: MemorialCategory;
   initialBibleRef?: BibleRef | null;
   initialVerseText?: string;
   initialTitle?: string;
   initialContent?: string;
+  initialTags?: string[];
 }
 
 const CATEGORIES: MemorialCategory[] = ['reflexao', 'oracao', 'testemunho', 'jejum'];
@@ -71,11 +74,14 @@ export function NovoRegistroSheet({
   visible,
   onClose,
   onSave,
+  mode = 'create',
+  editingEntry,
   initialCategory,
   initialBibleRef,
   initialVerseText,
   initialTitle,
   initialContent,
+  initialTags,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
@@ -153,25 +159,39 @@ export function NovoRegistroSheet({
 
   useEffect(() => {
     if (visible) {
-      setCategory(initialCategory || 'reflexao');
-      if (initialBibleRef) {
-        setBibleRef(initialBibleRef);
-        setSelectedBook(initialBibleRef.book);
-        setSelectedBookSlug(initialBibleRef.slug);
-        setChapter(initialBibleRef.chapter.toString());
-        setVerse(initialBibleRef.verse ? initialBibleRef.verse.toString() : '1');
+      if (editingEntry) {
+        setCategory(editingEntry.category);
+        setTitle(editingEntry.title || '');
+        setContent(editingEntry.content || '');
+        setSelectedTags(editingEntry.tags || []);
+        if (editingEntry.bible_ref) {
+          setBibleRef(editingEntry.bible_ref);
+          setSelectedBook(editingEntry.bible_ref.book || 'Salmos');
+          setSelectedBookSlug(editingEntry.bible_ref.slug || 'sl');
+          setChapter(editingEntry.bible_ref.chapter ? editingEntry.bible_ref.chapter.toString() : '1');
+          setVerse(editingEntry.bible_ref.verse ? editingEntry.bible_ref.verse.toString() : '1');
+        } else {
+          setBibleRef(null);
+        }
       } else {
-        setBibleRef(null);
+        setCategory(initialCategory || 'reflexao');
+        if (initialBibleRef) {
+          setBibleRef(initialBibleRef);
+          setSelectedBook(initialBibleRef.book);
+          setSelectedBookSlug(initialBibleRef.slug);
+          setChapter(initialBibleRef.chapter.toString());
+          setVerse(initialBibleRef.verse ? initialBibleRef.verse.toString() : '1');
+        } else {
+          setBibleRef(null);
+        }
+        setTitle(initialTitle !== undefined ? initialTitle : '');
+        setContent(initialContent !== undefined ? initialContent : '');
+        setSelectedTags(initialTags || []);
       }
-      if (initialTitle !== undefined) {
-        setTitle(initialTitle);
-      }
-      if (initialContent !== undefined) {
-        setContent(initialContent);
-      }
+
       if (initialVerseText) {
         setVerseQuoteText(initialVerseText);
-      } else if (initialVerseText === undefined && !initialBibleRef) {
+      } else if (initialVerseText === undefined && (!initialBibleRef && !editingEntry?.bible_ref)) {
         setVerseQuoteText(null);
       }
 
@@ -393,7 +413,7 @@ export function NovoRegistroSheet({
     setSaving(true);
 
     try {
-      await new Promise((r) => setTimeout(r, 450));
+      await new Promise((r) => setTimeout(r, 350));
 
       onSave({
         category,
@@ -401,8 +421,15 @@ export function NovoRegistroSheet({
         content: content.trim(),
         bible_ref: bibleRef || undefined,
         tags: selectedTags.length > 0 ? selectedTags : undefined,
-        ai_status: 'processing',
-        is_answered: category === 'oracao' ? false : undefined,
+        ai_status: editingEntry ? editingEntry.ai_status : 'processing',
+        is_answered: editingEntry ? editingEntry.is_answered : (category === 'oracao' ? false : undefined),
+        answered_at: editingEntry?.answered_at,
+        ai_connections: editingEntry?.ai_connections,
+        pastoral_intent: editingEntry?.pastoral_intent,
+        pastoral_intent_confidence: editingEntry?.pastoral_intent_confidence,
+        pastoral_intent_evaluated_at: editingEntry?.pastoral_intent_evaluated_at,
+        pastoral_intent_reason: editingEntry?.pastoral_intent_reason,
+        pastoral_alert_sent_types: editingEntry?.pastoral_alert_sent_types,
       });
 
       setTitle('');
@@ -458,9 +485,13 @@ export function NovoRegistroSheet({
             {/* Cabeçalho */}
             <View style={s.sheetHeader}>
               <View style={s.headerTitleWrap}>
-                <Text style={s.headerTitle}>Novo Marco de Fé</Text>
+                <Text style={s.headerTitle}>
+                  {mode === 'edit' ? 'Editar Marco de Fé' : 'Novo Marco de Fé'}
+                </Text>
                 <Text style={s.headerSubtitle}>
-                  Registre sua experiência para conexão bíblica
+                  {mode === 'edit'
+                    ? 'Atualize seu relato, referências bíblicas e detalhes'
+                    : 'Registre sua experiência para conexão bíblica'}
                 </Text>
               </View>
 

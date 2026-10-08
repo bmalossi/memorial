@@ -21,8 +21,10 @@ import { CATEGORY_CONFIG, relativeDate } from '../../lib/utils';
 import {
   markPrayerAnsweredInSupabase,
   deleteUserMemorial,
+  updateUserMemorial,
 } from '../../lib/memorialStore';
 import { attachAiConnectionsToMemorial } from '../../lib/aiConnectionService';
+import { NovoRegistroSheet } from '../../components/memorial/NovoRegistroSheet';
 import { VisualShareModal, VisualShareData } from '../../components/memorial/VisualShareModal';
 import { ActionSheetModal, ActionSheetItem, ConfirmModal } from '../../components/ui';
 import { triggerGlobalAtalaiaCrisis } from '../../lib/atalaiaCrisisManager';
@@ -433,10 +435,12 @@ const empty = StyleSheet.create({
 // ─── Header da tela ───────────────────────────────────────────────────────────
 function ScreenHeader({
   onBack,
+  onEdit,
   onShare,
   onMore,
 }: {
   onBack: () => void;
+  onEdit: () => void;
   onShare: () => void;
   onMore: () => void;
 }) {
@@ -459,6 +463,16 @@ function ScreenHeader({
       </Text>
 
       <View style={hdr.rightGroup}>
+        <TouchableOpacity
+          onPress={onEdit}
+          style={hdr.iconBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Editar este marco"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Feather name="edit-2" size={17} color={colors.text.primary} />
+        </TouchableOpacity>
+
         <TouchableOpacity
           onPress={onShare}
           style={hdr.iconBtn}
@@ -624,6 +638,8 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
 
   // Modais Editoriais (Zero Alert.alert genérico)
   const [actionMenuVisible, setActionMenuVisible] = useState(false);
+  const [editSheetVisible, setEditSheetVisible] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [answerConfirmVisible, setAnswerConfirmVisible] = useState(false);
@@ -790,7 +806,43 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
     } catch {}
   };
 
+  const handleUpdateEntry = async (updatedData: Omit<MemorialEntry, 'id' | 'created_at'>) => {
+    setIsUpdating(true);
+    try {
+      const updated = await updateUserMemorial(currentEntry.id, updatedData);
+      setCurrentEntry(updated);
+      setEditSheetVisible(false);
+      setInfoModal({
+        visible: true,
+        title: 'Marco Atualizado',
+        message: 'Suas alterações foram gravadas com sucesso.',
+        icon: 'check',
+      });
+    } catch (err: any) {
+      setInfoModal({
+        visible: true,
+        title: 'Erro ao Atualizar',
+        message: err?.message || 'Não foi possível atualizar o marco de fé.',
+        icon: 'alert-circle',
+        destructive: true,
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const actionMenuItems: ActionSheetItem[] = [
+    {
+      id: 'edit',
+      label: 'Editar Marco de Fé',
+      description: 'Alterar relato, título, categoria ou referências bíblicas',
+      icon: 'edit-2',
+      variant: 'accent',
+      onPress: () => {
+        setActionMenuVisible(false);
+        setEditSheetVisible(true);
+      },
+    },
     {
       id: 'connections',
       label: isAnalyzingConnections ? 'Mapeando Conexões…' : 'Mapear Conexões Bíblicas',
@@ -871,6 +923,7 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
 
       <ScreenHeader
         onBack={handleBack}
+        onEdit={() => setEditSheetVisible(true)}
         onShare={handleOpenVisualShare}
         onMore={handleMore}
       />
@@ -1072,6 +1125,15 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
         cancelLabel=""
         destructive={infoModal.destructive}
         onConfirm={() => setInfoModal((prev) => ({ ...prev, visible: false }))}
+      />
+
+      {/* ── Modal de Edição de Marco ── */}
+      <NovoRegistroSheet
+        visible={editSheetVisible}
+        onClose={() => setEditSheetVisible(false)}
+        onSave={handleUpdateEntry}
+        mode="edit"
+        editingEntry={currentEntry}
       />
     </View>
   );
