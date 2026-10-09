@@ -128,34 +128,105 @@ const CRISIS_PATTERNS = [
 ];
 
 const ANSWERED_PRAYER_PATTERNS = [
-  /(ora[çc][ãa]o|pedido|clamor|s[úu]plica) respondid[ao]/i,
-  /deus respondeu/i,
-  /o senhor respondeu/i,
-  /deus me ouviu e respondeu/i,
-  /milagre alcan[çc]ado/i,
-  /vit[óo]ria da ora[çc][ãa]o/i,
-  /resposta de ora[çc][ãa]o/i,
-  /clamor atendido/i,
-  /promessa cumprida/i,
+  /(ora[çc][ãa]o|pedido|clamor|s[úu]plica)\s*respondid[ao]/i,
+  /deus\s*respondeu/i,
+  /o\s*senhor\s*respondeu/i,
+  /deus\s*me\s*ouviu/i,
+  /deus\s*nos\s*ouviu/i,
+  /o\s*senhor\s*me\s*ouviu/i,
+  /o\s*senhor\s*nos\s*ouviu/i,
+  /deus\s*ouviu\s*(e\s*respondeu|meu\s*clamor|minha\s*ora[çc][ãa]o|minha\s*s[úu]plica|minha\s*voz|nosso\s*clamor)/i,
+  /milagre\s*alcan[çc]ado/i,
+  /vit[óo]ria\s*da\s*ora[çc][ãa]o/i,
+  /resposta\s*de\s*ora[çc][ãa]o/i,
+  /clamor\s*atendido/i,
+  /promessa\s*cumprida/i,
+  /ora[çc][ãa]o\s*atendida/i,
 ];
 
 const THANKSGIVING_PATTERNS = [
-  /gratid[ãa]o/i,
-  /gra[çc]as a deus/i,
-  /sou grato/i,
-  /muito grata?/i,
+  // ── Bênção divina e favor de Deus ──
+  /aben[çc]oad[oa]s?/i, // cobre "fui abençoado", "fomos abençoados", "sou abençoado", "abençoada", "abençoados"
+  /deus\s*(me\s*|nos\s*)?aben[çc]o(ou|e|ando|asse)/i,
+  /o\s*senhor\s*(me\s*|nos\s*)?aben[çc]o(ou|e|ando)/i,
+  /b[êe]n[çc][ãa]os?/i, // bênção, bênçãos
+  /b[êe]n[çc][ãa]o\s*(de\s*deus|do\s*senhor|divina)/i,
+  /deus\s*(operou|agiu|fez|interveio)/i,
+  /o\s*senhor\s*(operou|agiu|fez)/i,
+  /a\s*m[ãa]o\s*de\s*deus/i,
+  /deus\s*[ée]\s*bom/i,
+  /deus\s*tem\s*sido\s*bom/i,
+
+  // ── Testemunho e proclamação comunitária ──
+  /testemunh(ar|o|os|ando|ei|aremos|arei)/i, // cobre "testemunhar", "irei testemunhar", "vou testemunhar", "meu testemunho"
+  /contar\s*(o\s*que\s*deus\s*fez|meu\s*testemunho|essa\s*vit[óo]ria|para\s*a\s*igreja)/i,
+  /compartilhar\s*(essa\s*vit[óo]ria|essa\s*b[êe]n[çc][ãa]o|o\s*que\s*deus\s*fez)/i,
+  /dar\s*(meu\s*)?testemunho/i,
+
+  // ── Provisão, emprego, trabalho e portas abertas ──
+  /(oportunidade|porta|vaga)\s*de\s*(trabalho|emprego)/i, // cobre "oportunidade de emprego", "porta de emprego", etc.
+  /novo\s*(emprego|trabalho)/i,
+  /consegui\s*(o|um)?\s*(emprego|trabalho|vaga)/i,
+  /deus\s*abriu\s*(as\s*portas|uma\s*porta|portas)/i,
+  /o\s*senhor\s*abriu\s*(as\s*portas|uma\s*porta|portas)/i,
+  /porta(s)?\s*aberta(s)?/i,
+  /provis[ãa]o(\s*(de\s*deus|do\s*senhor|divina|sobrenatural))?/i,
+  /deus\s*(proveu|supr(iu|e))/i,
+  /o\s*senhor\s*(proveu|supr(iu|e))/i,
+
+  // ── Vitória, conquista, livramento e cura ──
   /vit[óo]ria/i,
+  /vit[óo]rias/i,
   /conquista/i,
-  /testemunho de b[êe]n[çc][ãa]o/i,
-  /muito feliz com deus/i,
-  /o senhor fez maravilhas/i,
+  /conquistas/i,
+  /conquistei/i,
+  /alcancei/i,
+  /venci/i,
+  /livramento/i,
+  /livramentos/i,
+  /deus\s*(me\s*|nos\s*)?livrou/i,
+  /o\s*senhor\s*(me\s*|nos\s*)?livrou/i,
+  /milagre/i,
+  /milagres/i,
+  /cura(d[oa])?/i,
+  /fui\s*curad[oa]/i,
+  /deus\s*(me\s*|nos\s*)?curou/i,
+  /restaura[çc][ãa]o/i,
+  /deus\s*restaurou/i,
+
+  // ── Gratidão, louvor, celebração e alegria no Senhor ──
+  /gratid[ãa]o/i,
+  /gra[çc]as\s*a\s*deus/i,
+  /gra[çc]as\s*ao\s*senhor/i,
+  /sou\s*grat[oa]/i,
+  /muito\s*grat[oa]/i,
+  /agrade[çc](o|er|endo|emos)/i,
+  /s[óo]\s*agradecer/i,
+  /agradecida?/i,
+  /gl[óo]ria\s*a\s*deus/i,
+  /gl[óo]rias\s*a\s*deus/i,
+  /aleluia/i,
+  /aleluias/i,
+  /louvado\s*seja\s*(deus|o\s*senhor|cristo|jesus)/i,
+  /louvor/i,
+  /louvores/i,
+  /exaltado\s*seja/i,
+  /deus\s*[ée]\s*fiel/i,
+  /fidelidade\s*de\s*deus/i,
+  /o\s*senhor\s*fez\s*maravilhas/i,
+  /maravilhas\s*de\s*deus/i,
   /ebin[ée]zer/i,
-  /deus [ée] fiel/i,
-  /deus aben[çc]oou/i,
-  /alegria no cora[çc][ãa]o/i,
-  /louvado seja deus/i,
-  /cora[çc][ãa]o transbordando/i,
-  /paz no cora[çc][ãa]o/i,
+  /alegria\s*no\s*cora[çc][ãa]o/i,
+  /cora[çc][ãa]o\s*alegre/i,
+  /cora[çc][ãa]o\s*transbordando/i,
+  /cora[çc][ãa]o\s*grat[oa]/i,
+  /cora[çc][ãa]o\s*cheio\s*de\s*gratid[ãa]o/i,
+  /paz\s*no\s*cora[çc][ãa]o/i,
+  /paz\s*de\s*deus/i,
+  /feliz\s*com\s*deus/i,
+  /muito\s*feliz/i,
+  /deus\s*cumpriu/i,
+  /promessa\s*(se\s*)?cumpriu/i,
 ];
 
 const THEOLOGICAL_QUERY_PATTERNS = [
@@ -193,7 +264,9 @@ const THEOLOGICAL_QUERY_PATTERNS = [
 
 /**
  * Classificação determinística imediata de alta velocidade e precisão.
- * Garante disponibilidade 100% offline e zero latência.
+ * Torna 'Reflexão' um ambiente geral acolhedor onde todas as naturezas espirituais
+ * (testemunho, oração, desabafos de aflição, dúvidas exegéticas) são analisadas
+ * pelo motor JEV para correto encaminhamento pastoral e notificação.
  */
 export function classifyPastoralIntentLocally(
   input: PastoralClassificationInput
@@ -203,7 +276,7 @@ export function classifyPastoralIntentLocally(
   const evaluatedAt = new Date().toISOString();
   const biblicalRef = input.bible_ref?.display || input.bible_ref?.book;
 
-  // 1. Pilar 4: ANSWERED_PRAYER (Prioridade máxima caso haja marcação explícita)
+  // 1. Pilar 4: ANSWERED_PRAYER (Prioridade máxima caso haja marcação explícita ou linguagem de oração respondida)
   if (input.is_answered === true) {
     return {
       intent: 'ANSWERED_PRAYER',
@@ -214,18 +287,19 @@ export function classifyPastoralIntentLocally(
     };
   }
 
+  // Sensibilidade em Reflexão, Oração e Testemunho para respostas divinas
   const hasAnsweredMarker = ANSWERED_PRAYER_PATTERNS.some((pat) => pat.test(lowerText));
-  if (hasAnsweredMarker && (input.category === 'oracao' || input.category === 'testemunho')) {
+  if (hasAnsweredMarker) {
     return {
       intent: 'ANSWERED_PRAYER',
-      confidence: 0.94,
+      confidence: 0.95,
       reason: 'Expressão de oração respondida identificada no relato.',
       biblical_reference: biblicalRef,
       evaluated_at: evaluatedAt,
     };
   }
 
-  // 2. Pilar 1: CRISIS (Prioridade de segurança e acolhimento)
+  // 2. Pilar 1: CRISIS (Prioridade de segurança e acolhimento para desabafos de sofrimento)
   const isCrisis = CRISIS_PATTERNS.some((pat) => pat.test(lowerText));
   if (isCrisis) {
     return {
@@ -237,7 +311,22 @@ export function classifyPastoralIntentLocally(
     };
   }
 
-  // 3. Pilar 2: THEOLOGICAL_QUERY (Passagem de estudo ou dúvida profunda)
+  // 3. Pilar 3: THANKSGIVING (Testemunho, bênção, provisão, alegria, gratidão)
+  // Em Reflexão (ambiente geral acolhedor), expressões de vitória, bênção ou testemunho
+  // qualificam confiavelmente para o pilar de Ação de Graças.
+  const isThanksgiving = THANKSGIVING_PATTERNS.some((pat) => pat.test(lowerText));
+  if (isThanksgiving || input.category === 'testemunho') {
+    const conf = isThanksgiving ? 0.95 : 0.85;
+    return {
+      intent: 'THANKSGIVING',
+      confidence: conf,
+      reason: 'Testemunho de vitória, bênção recebida ou gratidão a Deus identificados no relato reflexivo.',
+      biblical_reference: biblicalRef,
+      evaluated_at: evaluatedAt,
+    };
+  }
+
+  // 4. Pilar 2: THEOLOGICAL_QUERY (Passagem de estudo ou dúvida profunda)
   const isTheologicalQuery = THEOLOGICAL_QUERY_PATTERNS.some((pat) => pat.test(lowerText));
   const hasQuestionMark = fullText.includes('?');
   const hasRef = Boolean(input.bible_ref);
@@ -247,19 +336,6 @@ export function classifyPastoralIntentLocally(
       intent: 'THEOLOGICAL_QUERY',
       confidence: isTheologicalQuery ? 0.92 : 0.85,
       reason: 'Questionamento de estudo bíblico, reflexão apologética ou dúvida sobre as Escrituras.',
-      biblical_reference: biblicalRef,
-      evaluated_at: evaluatedAt,
-    };
-  }
-
-  // 4. Pilar 3: THANKSGIVING (Gratidão, testemunho, vitória)
-  const isThanksgiving = THANKSGIVING_PATTERNS.some((pat) => pat.test(lowerText));
-  if (isThanksgiving || input.category === 'testemunho') {
-    const conf = isThanksgiving ? 0.93 : 0.82;
-    return {
-      intent: 'THANKSGIVING',
-      confidence: conf,
-      reason: 'Testemunho de vitória, conquista ou expressão sincera de louvor e gratidão a Deus.',
       biblical_reference: biblicalRef,
       evaluated_at: evaluatedAt,
     };

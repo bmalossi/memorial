@@ -43,3 +43,6 @@ yarn-error.*
 
 # Private guides & documentation (do not commit or deploy)
 guia_versionamento_mobile.md
+
+# Supabase
+supabase/.temp/

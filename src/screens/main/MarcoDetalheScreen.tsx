@@ -24,6 +24,7 @@ import {
   updateUserMemorial,
 } from '../../lib/memorialStore';
 import { attachAiConnectionsToMemorial } from '../../lib/aiConnectionService';
+import { trackConnectionRead, trackConnectionShared } from '../../lib/langfuseService';
 import { NovoRegistroSheet } from '../../components/memorial/NovoRegistroSheet';
 import { VisualShareModal, VisualShareData } from '../../components/memorial/VisualShareModal';
 import { ActionSheetModal, ActionSheetItem, ConfirmModal } from '../../components/ui';
@@ -700,6 +701,7 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
   };
 
   const handleShareConnection = (c: AiConnection) => {
+    trackConnectionShared(currentEntry.id, c.reference);
     setVisualShareData({
       title: c.reference,
       content: c.verse_text,
@@ -877,6 +879,7 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
   ];
 
   const handleReadPassage = (connection: AiConnection) => {
+    trackConnectionRead(currentEntry.id, connection.reference);
     navigation?.navigate?.('Main', {
       screen: 'Biblia',
       params: {

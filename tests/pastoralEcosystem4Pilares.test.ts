@@ -206,4 +206,50 @@ describe('Ecossistema Completo de Cuidado Pastoral (4 Pilares)', () => {
       assert.equal(shouldShowPastoralActionBanner(noIntent, 'active'), false);
     });
   });
+
+  describe('Reflexão como Ambiente Geral Acolhedor (Recebimento de Todas as Naturezas)', () => {
+    it('deve classificar relato de bênção, emprego e testemunho salvo como "reflexao" como THANKSGIVING (caso real do usuário)', () => {
+      const result = classifyPastoralIntentLocally({
+        text: 'fui abençoado por Deus com uma oportunidade de emprego e que irei testemunhar para toda a igreja',
+        category: 'reflexao',
+      });
+
+      assert.equal(result.intent, 'THANKSGIVING');
+      assert.ok(result.confidence >= 0.80, `Esperado >= 0.80, recebido ${result.confidence}`);
+      assert.equal(shouldShowPastoralActionBanner(result, 'active'), true);
+    });
+
+    it('deve classificar relato de oração respondida salvo como "reflexao" como ANSWERED_PRAYER', () => {
+      const result = classifyPastoralIntentLocally({
+        text: 'O Senhor me ouviu e respondeu minha oração de cura na madrugada!',
+        category: 'reflexao',
+      });
+
+      assert.equal(result.intent, 'ANSWERED_PRAYER');
+      assert.ok(result.confidence >= 0.80);
+      assert.equal(shouldShowPastoralActionBanner(result, 'active'), true);
+    });
+
+    it('deve classificar desabafo de aflição extrema salvo como "reflexao" como CRISIS', () => {
+      const result = classifyPastoralIntentLocally({
+        text: 'Sinto uma dor na alma e uma angústia profunda, cheguei no meu limite.',
+        category: 'reflexao',
+      });
+
+      assert.equal(result.intent, 'CRISIS');
+      assert.ok(result.confidence >= 0.80);
+    });
+
+    it('deve classificar dúvida bíblica salva como "reflexao" como THEOLOGICAL_QUERY', () => {
+      const result = classifyPastoralIntentLocally({
+        text: 'Estou com dúvida sobre o que significa essa passagem bíblica.',
+        category: 'reflexao',
+      });
+
+      assert.equal(result.intent, 'THEOLOGICAL_QUERY');
+      assert.ok(result.confidence >= 0.80);
+      assert.equal(shouldShowPastoralActionBanner(result, 'active'), true);
+    });
+  });
 });
+

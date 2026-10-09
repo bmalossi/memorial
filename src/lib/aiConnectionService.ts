@@ -198,6 +198,8 @@ export async function generateBibleConnections(
         category: entry.category,
         bibleRef: entry.bible_ref,
         tags: entry.tags,
+        entryId: entry.id,
+        sessionId: entry.id,
       },
     });
 
