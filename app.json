@@ -79,7 +79,8 @@
           }
         }
       ],
-      "./plugins/withImmersiveMode.js"
+      "./plugins/withImmersiveMode.js",
+      "expo-secure-store"
     ],
     "extra": {
       "supabaseUrl": "https://yqnsaslvxmqaeeccmcmg.supabase.co",

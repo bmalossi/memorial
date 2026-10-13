@@ -36,7 +36,8 @@ export interface PastoralPillCopy {
 
 // ── Padrões Semânticos e Heurísticas Determinísticas de Alta Precisão ──────────
 
-const CRISIS_PATTERNS = [
+// Padrões FORTES: ideação de morte/suicídio. Disparam crise mesmo sem pronome explícito.
+const CRISIS_STRONG_PATTERNS = [
   // ── Perda de vontade de viver / ideação de morte / ideação suicida ──
   /vontade de viver/i, // cobre "não tô com mais vontade de viver", "perdi a vontade de viver", "sem vontade de viver", etc.
   /vontade de morrer/i,
@@ -45,7 +46,6 @@ const CRISIS_PATTERNS = [
   /melhor morrer/i,
   /n[ãa]o (t[ôo]|estou|tenho|sinto|vejo).*(vontade|raz[ãa]o|motivo|sentido).*viver/i,
   /sem (vontade|raz[ãa]o|motivo|sentido).*viver/i,
-  /perdi a vontade/i,
   /perder a vontade de viver/i,
   /n[ãa]o quero mais viver/i,
   /n[ãa]o aguent(o|ei) mais viver/i,
@@ -63,6 +63,12 @@ const CRISIS_PATTERNS = [
   /suic[íi]d(io|a|ar)?/i,
   /desistir de viver/i,
   /desistir da vida/i,
+];
+
+// Padrões FRACOS: palavras de dor que também aparecem em pregações, estudos e desabafos
+// sobre terceiros. Só contam quando o autor fala de si na mesma frase (ver detectCrisisSignal).
+const CRISIS_WEAK_PATTERNS = [
+  /perdi a vontade/i,
   /vontade de desistir/i,
   /pensando em desistir/i,
 
@@ -126,6 +132,79 @@ const CRISIS_PATTERNS = [
   /perdi a cabe[çc]a/i,
   /pesadelo sem fim/i,
 ];
+
+// ── Calibração contextual de CRISIS ────────────────────────────────────────────
+// Princípio: palavra de dor isolada NÃO é crise. Um desabafo sobre a igreja, uma
+// pregação anotada ou um estudo sobre "desespero" não pedem amparo pastoral.
+
+/** Tokens que indicam que o AUTOR está falando de si mesmo. */
+const FIRST_PERSON_TOKENS = new Set([
+  'eu', 'me', 'mim', 'comigo', 'meu', 'minha', 'meus', 'minhas',
+  'estou', 'to', 'tô', 'sinto', 'ando', 'fiquei', 'fico',
+]);
+
+/** Marcadores de pregação, estudo ou narrativa sobre terceiros. */
+const TEACHING_OR_THIRD_PERSON_MARKERS = [
+  'bíblia', 'biblia', 'versículo', 'versiculo', 'passagem', 'pregação', 'pregacao',
+  'sermão', 'sermao', 'pastor ', 'diz que', 'disse que', 'falou ', 'o povo', 'as pessoas',
+  'aqueles que', 'eles ', 'ela ', 'ele ', 'salomão', 'salomao', 'jó ', 'elias',
+];
+
+function splitSentences(text: string): string[] {
+  return text
+    .split(/[.!?\n]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+function hasFirstPerson(sentence: string): boolean {
+  const tokens = sentence.toLowerCase().split(/[^a-záàâãéêíóôõúüç]+/);
+  return tokens.some((t) => FIRST_PERSON_TOKENS.has(t));
+}
+
+function hasTeachingContext(sentence: string): boolean {
+  const lower = sentence.toLowerCase() + ' ';
+  return TEACHING_OR_THIRD_PERSON_MARKERS.some((m) => lower.includes(m));
+}
+
+/** "desespero dos líderes", "tristeza das pessoas": a dor é de outros, não do autor. */
+function isPainOfOthers(lowerSentence: string): boolean {
+  return /(desespero|ang[úu]stia|tristeza|solid[ãa]o|sofrimento|dor)\s+(dos|das|do|da)\s+(?!meu|minha|meus|minhas)/.test(
+    lowerSentence
+  );
+}
+
+/**
+ * Detecta crise real, por frase:
+ * - Padrão FORTE (ideação de morte/suicídio): dispara, salvo se a frase for claramente
+ *   pregação/terceiros e sem primeira pessoa (ex.: "Jó queria morrer").
+ * - Padrão FRACO (depressão, desespero, angústia...): exige primeira pessoa na MESMA frase.
+ */
+function detectCrisisSignal(fullText: string): { confidence: number } | null {
+  const sentences = splitSentences(fullText);
+
+  for (const sentence of sentences) {
+    const lower = sentence.toLowerCase();
+    const firstPerson = hasFirstPerson(sentence);
+
+    if (CRISIS_STRONG_PATTERNS.some((pat) => pat.test(lower))) {
+      if (firstPerson || !hasTeachingContext(sentence)) {
+        return { confidence: 0.95 };
+      }
+      continue;
+    }
+
+    if (
+      firstPerson &&
+      !isPainOfOthers(lower) &&
+      CRISIS_WEAK_PATTERNS.some((pat) => pat.test(lower))
+    ) {
+      return { confidence: 0.88 };
+    }
+  }
+
+  return null;
+}
 
 const ANSWERED_PRAYER_PATTERNS = [
   /(ora[çc][ãa]o|pedido|clamor|s[úu]plica)\s*respondid[ao]/i,
@@ -300,12 +379,14 @@ export function classifyPastoralIntentLocally(
   }
 
   // 2. Pilar 1: CRISIS (Prioridade de segurança e acolhimento para desabafos de sofrimento)
-  const isCrisis = CRISIS_PATTERNS.some((pat) => pat.test(lowerText));
-  if (isCrisis) {
+  // Calibrado: só dispara para sofrimento PESSOAL e ATUAL do autor — nunca para pregação,
+  // citação bíblica, anotação de estudo ou relato sobre terceiros.
+  const crisisSignal = detectCrisisSignal(fullText);
+  if (crisisSignal) {
     return {
       intent: 'CRISIS',
-      confidence: 0.95,
-      reason: 'Sinais agudos de sofrimento, aflição interior ou crise espiritual detectados.',
+      confidence: crisisSignal.confidence,
+      reason: 'Sinais agudos de sofrimento pessoal, aflição interior ou crise espiritual detectados.',
       biblical_reference: biblicalRef,
       evaluated_at: evaluatedAt,
     };
@@ -356,14 +437,21 @@ export function classifyPastoralIntentLocally(
 export async function classifyPastoralIntent(
   input: PastoralClassificationInput
 ): Promise<PastoralClassificationResult> {
-  const localResult = classifyPastoralIntentLocally(input);
+  const evaluatedAt = new Date().toISOString();
+  const biblicalRef = input.bible_ref?.display || input.bible_ref?.book;
 
-  // Se já tiver certeza absoluta (ex: marcação explícita de oração ou crise evidente), retorna direto
-  if (localResult.confidence >= 0.94) {
-    return localResult;
+  // 1. Marcação explícita de oração respondida pelo usuário (ação direta de interface)
+  if (input.is_answered === true) {
+    return {
+      intent: 'ANSWERED_PRAYER',
+      confidence: 0.99,
+      reason: 'Marcação explícita de oração respondida pelo usuário.',
+      biblical_reference: biblicalRef,
+      evaluated_at: evaluatedAt,
+    };
   }
 
-  // Tentar validação profunda com JEV / Supabase Edge Function se houver conexão
+  // 2. Avaliação Semântica Contextual Profunda (TypeSafe JEV via Edge Function)
   try {
     const { supabase } = await import('./supabase');
     const { data, error } = await supabase.functions.invoke('care-triage', {
@@ -376,7 +464,7 @@ export async function classifyPastoralIntent(
       },
     });
 
-    if (!error && data && data.pastoral_intent) {
+    if (!error && data) {
       const validIntents: PastoralIntent[] = [
         'CRISIS',
         'THEOLOGICAL_QUERY',
@@ -384,22 +472,35 @@ export async function classifyPastoralIntent(
         'ANSWERED_PRAYER',
       ];
 
-      if (validIntents.includes(data.pastoral_intent)) {
+      // A) JEV selecionou um dos 4 pilares com confiança calibrada
+      if (data.pastoral_intent && validIntents.includes(data.pastoral_intent)) {
         return {
           intent: data.pastoral_intent as PastoralIntent,
-          confidence: typeof data.confidence === 'number' ? data.confidence : 0.9,
-          reason: data.reason || 'Classificado pelo motor JEV (TypeSafe AI).',
-          biblical_reference: data.biblical_reference || input.bible_ref?.display,
-          evaluated_at: new Date().toISOString(),
+          confidence: typeof data.confidence === 'number' ? data.confidence : 0.85,
+          reason: data.reason || 'Classificado contextualmente pelo motor JEV (TypeSafe AI).',
+          biblical_reference: data.biblical_reference || biblicalRef,
+          evaluated_at: evaluatedAt,
+        };
+      }
+
+      // B) JEV julgou contextualmente como neutro, reflexão geral, anotação ou desabafo
+      if (data.pastoral_intent === null || data.pastoral_intent === 'NEUTRAL_NOTE') {
+        return {
+          intent: null,
+          confidence: typeof data.confidence === 'number' ? data.confidence : 0.0,
+          reason: data.reason || 'Relato contextual sereno ou desabafo eclesiológico sem ativação pastoral.',
+          biblical_reference: biblicalRef,
+          evaluated_at: evaluatedAt,
         };
       }
     }
   } catch (err) {
-    // Falha silenciosa de rede mantém o resultado local de alta precisão
-    console.log('[ClassifierJEV] Fallback local ativado:', err);
+    // Falha silenciosa de conexão: ativa fallback determinístico local
+    console.log('[ClassifierJEV] Fallback local ativado (modo offline):', err);
   }
 
-  return localResult;
+  // 3. Fallback determinístico offline
+  return classifyPastoralIntentLocally(input);
 }
 
 /**

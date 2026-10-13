@@ -7,6 +7,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from './secureStorage';
 
 export const REMEMBER_CREDENTIALS_KEY = '@memorial_remember_credentials';
 export const SAVED_EMAIL_KEY = '@memorial_saved_email';
@@ -26,7 +27,7 @@ export async function getSavedCredentials(): Promise<SavedCredentials> {
     const [rememberVal, emailVal, passVal] = await Promise.all([
       AsyncStorage.getItem(REMEMBER_CREDENTIALS_KEY),
       AsyncStorage.getItem(SAVED_EMAIL_KEY),
-      AsyncStorage.getItem(SAVED_PASSWORD_KEY),
+      secureStorage.getItem(SAVED_PASSWORD_KEY),
     ]);
 
     const remember = rememberVal === 'true';
@@ -53,7 +54,7 @@ export async function saveCredentials(email: string, password: string): Promise<
     await Promise.all([
       AsyncStorage.setItem(REMEMBER_CREDENTIALS_KEY, 'true'),
       AsyncStorage.setItem(SAVED_EMAIL_KEY, email.trim()),
-      AsyncStorage.setItem(SAVED_PASSWORD_KEY, password),
+      secureStorage.setItem(SAVED_PASSWORD_KEY, password),
     ]);
   } catch (err) {
     console.warn('[authCredentialsStore] Erro ao salvar credenciais:', err);
@@ -68,7 +69,7 @@ export async function clearSavedCredentials(): Promise<void> {
     await Promise.all([
       AsyncStorage.removeItem(REMEMBER_CREDENTIALS_KEY),
       AsyncStorage.removeItem(SAVED_EMAIL_KEY),
-      AsyncStorage.removeItem(SAVED_PASSWORD_KEY),
+      secureStorage.removeItem(SAVED_PASSWORD_KEY),
     ]);
   } catch (err) {
     console.warn('[authCredentialsStore] Erro ao limpar credenciais salvas:', err);

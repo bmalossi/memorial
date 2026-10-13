@@ -15,7 +15,7 @@ const LANGFUSE_PUBLIC_KEY = process.env.EXPO_PUBLIC_LANGFUSE_PUBLIC_KEY || '';
 const LANGFUSE_BASE_URL =
   process.env.EXPO_PUBLIC_LANGFUSE_BASE_URL ||
   process.env.EXPO_PUBLIC_LANGFUSE_HOST ||
-  'https://cloud.langfuse.com';
+  'https://us.cloud.langfuse.com';
 
 export interface ScorePayload {
   name: string;
