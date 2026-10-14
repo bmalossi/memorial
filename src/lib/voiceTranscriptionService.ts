@@ -12,8 +12,80 @@ const STT_API_URL =
   'https://www.bibliavive.com.br/api/stt';
 
 export interface TranscriptionProgress {
-  status: 'uploading' | 'transcribing' | 'completed' | 'error';
+  status: 'uploading' | 'transcribing' | 'completed' | 'local' | 'error';
   message: string;
+}
+
+export interface LocalSpeechRecognizer {
+  isAvailable(): Promise<boolean>;
+  start(callbacks?: { onPartialResult?: (text: string) => void }): Promise<void>;
+  stop(): Promise<string>;
+  cancel(): Promise<void>;
+  transcribeAudioFile(audioUri: string, onProgress?: (p: TranscriptionProgress) => void): Promise<string>;
+}
+
+export interface TranscriptionServiceDependencies {
+  fetchFn?: typeof fetch;
+  localRecognizer?: LocalSpeechRecognizer;
+  uploader?: (audioUri: string, uploadUrl: string) => Promise<boolean>;
+}
+
+let activeDependencies: TranscriptionServiceDependencies = {};
+
+export function setTranscriptionDependencies(deps: Partial<TranscriptionServiceDependencies>): void {
+  activeDependencies = { ...activeDependencies, ...deps };
+}
+
+export function setLocalSpeechRecognizer(recognizer: LocalSpeechRecognizer): void {
+  activeDependencies.localRecognizer = recognizer;
+}
+
+export function resetTranscriptionDependencies(): void {
+  activeDependencies = {};
+}
+
+function getFetch(): typeof fetch {
+  return activeDependencies.fetchFn || fetch;
+}
+
+async function checkQuotaExceededResponse(res: Response): Promise<boolean> {
+  if (res.status === 429) {
+    try {
+      const cloned = typeof res.clone === 'function' ? res.clone() : res;
+      const data = await cloned.json();
+      if (data && data.code === 'quota_exceeded') {
+        return true;
+      }
+    } catch {}
+  }
+  return false;
+}
+
+async function extractErrorMessage(res: Response, defaultMsg: string): Promise<string> {
+  try {
+    const cloned = typeof res.clone === 'function' ? res.clone() : res;
+    const data = await cloned.json();
+    return data.error || data.message || (data.code ? `[${data.code}] ${defaultMsg}` : defaultMsg);
+  } catch {
+    return defaultMsg;
+  }
+}
+
+async function handleQuotaExceededFallback(
+  audioUri: string,
+  onProgress?: (p: TranscriptionProgress) => void
+): Promise<string> {
+  const localRecognizer = activeDependencies.localRecognizer;
+  if (!localRecognizer) {
+    throw new Error('Limite de transcrições premium atingido para este período e nenhum motor de reconhecimento local está disponível.');
+  }
+
+  onProgress?.({
+    status: 'local',
+    message: 'Cota de transcrição na nuvem atingida. Transcrevendo no aparelho...',
+  });
+
+  return await localRecognizer.transcribeAudioFile(audioUri, onProgress);
 }
 
 /**
@@ -98,7 +170,7 @@ async function uploadToR2(audioUri: string, uploadUrl: string): Promise<boolean>
       if (typeof file.bytes === 'function') {
         const bytes = await file.bytes();
         if (bytes && bytes.length > 50) {
-          const res = await fetch(uploadUrl, {
+          const res = await getFetch()(uploadUrl, {
             method: 'PUT',
             headers: {
               'Content-Type': contentType,
@@ -130,7 +202,7 @@ async function uploadToR2(audioUri: string, uploadUrl: string): Promise<boolean>
           bytes[i] = binStr.charCodeAt(i);
         }
 
-        const res = await fetch(uploadUrl, {
+        const res = await getFetch()(uploadUrl, {
           method: 'PUT',
           headers: {
             'Content-Type': contentType,
@@ -168,8 +240,18 @@ async function uploadDirectToSTT(audioUri: string, endpoint: string): Promise<st
         const data = JSON.parse(res.body);
         if (data.id) return data.id;
       }
+      if (res.status === 429 && res.body) {
+        const data = JSON.parse(res.body);
+        if (data.code === 'quota_exceeded') {
+          const err: any = new Error('quota_exceeded');
+          err.code = 'quota_exceeded';
+          throw err;
+        }
+      }
     }
-  } catch {}
+  } catch (err: any) {
+    if (err.code === 'quota_exceeded') throw err;
+  }
 
   // Tentativa 2: file.bytes() -> fetch POST
   try {
@@ -179,11 +261,16 @@ async function uploadDirectToSTT(audioUri: string, endpoint: string): Promise<st
       if (typeof file.bytes === 'function') {
         const bytes = await file.bytes();
         if (bytes && bytes.length > 50) {
-          const res = await fetch(endpoint, {
+          const res = await getFetch()(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': contentType },
             body: bytes,
           });
+          if (await checkQuotaExceededResponse(res)) {
+            const err: any = new Error('quota_exceeded');
+            err.code = 'quota_exceeded';
+            throw err;
+          }
           if (res.ok) {
             const data = await res.json();
             if (data.id) return data.id;
@@ -191,7 +278,9 @@ async function uploadDirectToSTT(audioUri: string, endpoint: string): Promise<st
         }
       }
     }
-  } catch {}
+  } catch (err: any) {
+    if (err.code === 'quota_exceeded') throw err;
+  }
 
   throw new Error('Não foi possível enviar o áudio gravado para o serviço de transcrição.');
 }
@@ -210,18 +299,27 @@ export async function transcribeAudioUri(
     });
 
     let transcriptId: string | null = null;
+    const fetchFn = getFetch();
 
     // Se o áudio já for uma URL remota pública
     if (audioUri.startsWith('http://') || audioUri.startsWith('https://')) {
-      const submitRes = await fetch(STT_API_URL, {
+      const submitRes = await fetchFn(STT_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ audioUrl: audioUri }),
       });
-      if (submitRes.ok) {
-        const submitData = await submitRes.json();
-        transcriptId = submitData.id || null;
+
+      if (await checkQuotaExceededResponse(submitRes)) {
+        return await handleQuotaExceededFallback(audioUri, onProgress);
       }
+
+      if (!submitRes.ok) {
+        const errorMsg = await extractErrorMessage(submitRes, `Erro ${submitRes.status} no serviço de transcrição.`);
+        throw new Error(errorMsg);
+      }
+
+      const submitData = await submitRes.json();
+      transcriptId = submitData.id || null;
     } else {
       // Inspeciona o arquivo local antes do upload
       let fileInfo = await inspectAudioFile(audioUri);
@@ -236,31 +334,67 @@ export async function transcribeAudioUri(
 
       // Caminho Primário: Cloudflare R2 Presigned PUT
       try {
-        const urlRes = await fetch(`${STT_API_URL}?action=upload-url`);
+        const urlRes = await fetchFn(`${STT_API_URL}?action=upload-url`);
+
+        if (await checkQuotaExceededResponse(urlRes)) {
+          return await handleQuotaExceededFallback(audioUri, onProgress);
+        }
+
         if (urlRes.ok) {
           const { uploadUrl, audioUrl } = await urlRes.json();
           if (uploadUrl && audioUrl) {
-            const r2Uploaded = await uploadToR2(audioUri, uploadUrl);
+            const uploader = activeDependencies.uploader || uploadToR2;
+            const r2Uploaded = await uploader(audioUri, uploadUrl);
             if (r2Uploaded) {
-              const submitRes = await fetch(STT_API_URL, {
+              const submitRes = await fetchFn(STT_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ audioUrl }),
               });
+
+              if (await checkQuotaExceededResponse(submitRes)) {
+                return await handleQuotaExceededFallback(audioUri, onProgress);
+              }
+
               if (submitRes.ok) {
                 const submitData = await submitRes.json();
                 transcriptId = submitData.id || null;
+              } else {
+                const errorMsg = await extractErrorMessage(submitRes, `Erro ${submitRes.status} no envio para transcrição.`);
+                throw new Error(errorMsg);
               }
             }
           }
+        } else if (urlRes.status >= 500) {
+          const errorMsg = await extractErrorMessage(urlRes, `Erro ${urlRes.status} no servidor de transcrição.`);
+          throw new Error(errorMsg);
+        } else if (urlRes.status === 429) {
+          const errorMsg = await extractErrorMessage(urlRes, 'Muitas requisições (429).');
+          throw new Error(errorMsg);
         }
-      } catch (r2Err) {
+      } catch (r2Err: any) {
+        if (
+          r2Err.code === 'quota_exceeded' ||
+          r2Err.message?.includes('quota_exceeded') ||
+          r2Err.status >= 500 ||
+          r2Err.status === 429 ||
+          r2Err.message?.includes('Erro 5')
+        ) {
+          throw r2Err;
+        }
         console.warn('[Memorial Voice] Falha ao enviar para R2 presigned, usando contingência direta:', r2Err);
       }
 
       // Caminho de Contingência: Upload direto ao STT proxy
       if (!transcriptId) {
-        transcriptId = await uploadDirectToSTT(audioUri, STT_API_URL);
+        try {
+          transcriptId = await uploadDirectToSTT(audioUri, STT_API_URL);
+        } catch (directErr: any) {
+          if (directErr.code === 'quota_exceeded') {
+            return await handleQuotaExceededFallback(audioUri, onProgress);
+          }
+          throw directErr;
+        }
       }
     }
 
@@ -280,8 +414,21 @@ export async function transcribeAudioUri(
     while (Date.now() - startTime < maxWaitMs) {
       await new Promise((r) => setTimeout(r, 1000));
 
-      const pollRes = await fetch(`${STT_API_URL}?id=${encodeURIComponent(transcriptId)}`);
+      const pollRes = await fetchFn(`${STT_API_URL}?id=${encodeURIComponent(transcriptId)}`);
+
+      if (await checkQuotaExceededResponse(pollRes)) {
+        return await handleQuotaExceededFallback(audioUri, onProgress);
+      }
+
       if (!pollRes.ok) {
+        if (pollRes.status >= 500) {
+          const errorMsg = await extractErrorMessage(pollRes, `Erro ${pollRes.status} ao consultar status da transcrição.`);
+          throw new Error(errorMsg);
+        }
+        if (pollRes.status === 429) {
+          const errorMsg = await extractErrorMessage(pollRes, 'Muitas requisições (429).');
+          throw new Error(errorMsg);
+        }
         continue;
       }
 
