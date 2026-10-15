@@ -39,9 +39,9 @@ Work the **frontier**: any ticket whose blockers are all done. Os tickets 3, 4, 
 
 **Blocked by:** Ditado local on-device no Novo Registro
 
-- [ ] Com a cota estourada, a barra de captura rápida usa o modo local.
-- [ ] O aviso de modo local é idêntico ao do Novo Registro.
-- [ ] Cancelamento e edição seguem o mesmo padrão.
+- [x] Com a cota estourada, a barra de captura rápida usa o modo local.
+- [x] O aviso de modo local é idêntico ao do Novo Registro.
+- [x] Cancelamento e edição seguem o mesmo padrão.
 
 ## Pré-verificação de cota e gatilho offline
 

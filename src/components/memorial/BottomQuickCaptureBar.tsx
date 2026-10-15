@@ -10,14 +10,15 @@ import {
   Animated,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useTheme, spacing } from '../../theme';
+import { useTheme, spacing, radius } from '../../theme';
 import {
   isNativeAudioAvailable,
   startNativeRecording,
   stopNativeRecording,
   cancelNativeRecording,
 } from '../../lib/nativeAudioService';
-import { transcribeAudioUri } from '../../lib/voiceTranscriptionService';
+import { transcribeAudioUri, LocalSpeechRecognizer } from '../../lib/voiceTranscriptionService';
+import { defaultOnDeviceSpeechRecognizer } from '../../lib/onDeviceSpeechService';
 
 interface BottomQuickCaptureBarProps {
   value: string;
@@ -26,6 +27,7 @@ interface BottomQuickCaptureBarProps {
   onOpenFullSheet: () => void;
   onError?: (title: string, message: string) => void;
   isSubmitting?: boolean;
+  speechRecognizer?: LocalSpeechRecognizer;
 }
 
 export function BottomQuickCaptureBar({
@@ -35,15 +37,28 @@ export function BottomQuickCaptureBar({
   onOpenFullSheet,
   onError,
   isSubmitting = false,
+  speechRecognizer,
 }: BottomQuickCaptureBarProps) {
   const { colors, isDark } = useTheme();
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcribeMessage, setTranscribeMessage] = useState('');
+  const [isLocalModeNotice, setIsLocalModeNotice] = useState(false);
+  const [isLocalLiveDictation, setIsLocalLiveDictation] = useState(false);
+
+  const baseContentBeforeLiveRef = useRef<string>('');
+  const recordingTimer = useRef<any>(null);
+  const isRecordingRef = useRef(false);
+  const isLocalLiveDictationRef = useRef(false);
+  isRecordingRef.current = isRecording;
+  isLocalLiveDictationRef.current = isLocalLiveDictation;
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const inputRef = useRef<TextInput>(null);
+
+  const recognizer = speechRecognizer || defaultOnDeviceSpeechRecognizer;
 
   // Pulso discreto no ponto indicador de gravação
   useEffect(() => {
@@ -69,16 +84,63 @@ export function BottomQuickCaptureBar({
     }
   }, [isRecording]);
 
+  useEffect(() => {
+    return () => {
+      if (recordingTimer.current) {
+        clearInterval(recordingTimer.current);
+      }
+      if (isRecordingRef.current) {
+        if (isLocalLiveDictationRef.current) {
+          recognizer.cancel().catch(() => {});
+        } else {
+          cancelNativeRecording().catch(() => {});
+        }
+      }
+    };
+  }, [recognizer]);
+
   const handleToggleVoice = async () => {
     if (isTranscribing) return;
 
     if (isRecording) {
+      if (isLocalLiveDictation) {
+        try {
+          if (recordingTimer.current) clearInterval(recordingTimer.current);
+          setIsRecording(false);
+          setIsLocalLiveDictation(false);
+          setIsTranscribing(true);
+          setTranscribeMessage('Finalizando reconhecimento no aparelho...');
+
+          const finalText = await recognizer.stop();
+          const base = baseContentBeforeLiveRef.current.trim();
+          if (finalText && finalText.trim()) {
+            onChangeText(base ? `${base}\n\n${finalText.trim()}` : finalText.trim());
+          }
+          setIsLocalModeNotice(true);
+        } catch (err: any) {
+          console.warn('[QuickCapture] Erro ao finalizar ditado local:', err);
+        } finally {
+          setIsTranscribing(false);
+          setTranscribeMessage('');
+          setRecordingSeconds(0);
+        }
+        return;
+      }
+
       try {
         setIsRecording(false);
         setIsTranscribing(true);
+        setTranscribeMessage('Finalizando áudio...');
 
         const uri = await stopNativeRecording();
-        const transcript = await transcribeAudioUri(uri);
+        setTranscribeMessage('Transcrevendo relato...');
+
+        const transcript = await transcribeAudioUri(uri, (p) => {
+          setTranscribeMessage(p.message);
+          if (p.status === 'local') {
+            setIsLocalModeNotice(true);
+          }
+        });
 
         if (transcript && transcript.trim()) {
           const updated = value.trim()
@@ -94,42 +156,93 @@ export function BottomQuickCaptureBar({
         );
       } finally {
         setIsTranscribing(false);
+        setTranscribeMessage('');
         setRecordingSeconds(0);
       }
-    } else {
-      if (!isNativeAudioAvailable()) {
-        onError?.(
-          'Gravação de Voz Nativa',
-          'A gravação de voz com transcrição em tempo real requer a Dev Build do Memorial.'
-        );
-        return;
-      }
+      return;
+    }
 
-      try {
-        setRecordingSeconds(0);
-        setIsRecording(true);
-        await startNativeRecording((secs) => {
-          setRecordingSeconds(secs);
-        });
-      } catch (err: any) {
-        setIsRecording(false);
-        console.warn('[QuickCapture] Erro ao gravar voz:', err);
-        if (err.message === 'PERMISSION_DENIED') {
+    // Se o modo local já estiver ativo, usa ditado on-device em tempo real
+    if (isLocalModeNotice) {
+      const isAvail = await recognizer.isAvailable();
+      if (isAvail) {
+        try {
+          setIsLocalLiveDictation(true);
+          setIsRecording(true);
+          setRecordingSeconds(0);
+          baseContentBeforeLiveRef.current = value;
+
+          if (recordingTimer.current) clearInterval(recordingTimer.current);
+          recordingTimer.current = setInterval(() => {
+            setRecordingSeconds((prev) => prev + 1);
+          }, 1000);
+
+          await recognizer.start({
+            onPartialResult: (partialText) => {
+              const base = baseContentBeforeLiveRef.current.trim();
+              if (partialText) {
+                onChangeText(base ? `${base}\n\n${partialText}` : partialText);
+              }
+            },
+          });
+          return;
+        } catch (liveErr: any) {
+          if (recordingTimer.current) clearInterval(recordingTimer.current);
+          setIsLocalLiveDictation(false);
+          setIsRecording(false);
           onError?.(
-            'Permissão de Microfone',
-            'O Memorial precisa de autorização de microfone para registrar memórias por voz.'
+            'Reconhecimento de Voz Local',
+            liveErr.message || 'Não foi possível iniciar o reconhecimento de voz no aparelho.'
           );
-        } else {
-          onError?.(
-            'Gravação de Áudio',
-            err.message || 'Não foi possível iniciar o microfone neste momento.'
-          );
+          return;
         }
+      }
+    }
+
+    if (!isNativeAudioAvailable()) {
+      onError?.(
+        'Gravação de Voz Nativa',
+        'A gravação de voz com transcrição em tempo real requer a Dev Build do Memorial.'
+      );
+      return;
+    }
+
+    try {
+      setRecordingSeconds(0);
+      setIsRecording(true);
+      await startNativeRecording((secs) => {
+        setRecordingSeconds(secs);
+      });
+    } catch (err: any) {
+      setIsRecording(false);
+      console.warn('[QuickCapture] Erro ao gravar voz:', err);
+      if (err.message === 'PERMISSION_DENIED') {
+        onError?.(
+          'Permissão de Microfone',
+          'O Memorial precisa de autorização de microfone para registrar memórias por voz.'
+        );
+      } else {
+        onError?.(
+          'Gravação de Áudio',
+          err.message || 'Não foi possível iniciar o microfone neste momento.'
+        );
       }
     }
   };
 
   const handleCancelVoice = async () => {
+    if (isLocalLiveDictation) {
+      try {
+        if (recordingTimer.current) clearInterval(recordingTimer.current);
+        await recognizer.cancel();
+      } catch {}
+      onChangeText(baseContentBeforeLiveRef.current);
+      setIsRecording(false);
+      setIsLocalLiveDictation(false);
+      setRecordingSeconds(0);
+      return;
+    }
+
     try {
       await cancelNativeRecording();
     } catch {}
@@ -147,140 +260,213 @@ export function BottomQuickCaptureBar({
   };
 
   return (
-    <View
-      style={[
-        styles.capsule,
-        {
-          backgroundColor: colors.bg.surface,
-          borderColor: colors.border.DEFAULT,
-          shadowColor: isDark ? '#000000' : '#3A3228',
-        },
-      ]}
-    >
-      {/* Ícone '+' à esquerda: discreto, limpo, sem moldura artificial */}
-      <TouchableOpacity
-        onPress={onOpenFullSheet}
-        style={styles.iconBtn}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel="Abrir formulário completo de registro"
-      >
-        <Feather name="plus" size={20} color={colors.text.secondary} />
-      </TouchableOpacity>
-
-      {/* Área Central: Entrada de texto OU Estado de gravação/transcrição */}
-      {isRecording ? (
-        <View style={styles.recordingRow}>
-          <Animated.View
-            style={[
-              styles.recordingDot,
-              {
-                backgroundColor: colors.error,
-                transform: [{ scale: pulseAnim }],
-              },
-            ]}
-          />
-          <Text style={[styles.recordingTimerText, { color: colors.text.primary }]}>
-            Gravando {formatTimer(recordingSeconds)}
-          </Text>
+    <View style={styles.wrapper}>
+      {/* ── Aviso Sereno de Modo Local (On-Device) ── */}
+      {isLocalModeNotice && (
+        <View
+          style={[
+            styles.localNoticeBanner,
+            {
+              backgroundColor: colors.bg.subtle,
+              borderColor: colors.border.active,
+            },
+          ]}
+        >
+          <View style={styles.localNoticeContent}>
+            <Feather name="shield" size={13} color={colors.amber.DEFAULT} />
+            <Text style={[styles.localNoticeText, { color: colors.text.secondary }]}>
+              Modo local ativo: transcrito no aparelho em pt-BR. Vale revisar o texto.
+            </Text>
+          </View>
           <TouchableOpacity
-            onPress={handleCancelVoice}
-            style={styles.cancelVoiceBtn}
+            onPress={() => setIsLocalModeNotice(false)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityRole="button"
-            accessibilityLabel="Cancelar gravação"
+            accessibilityLabel="Fechar aviso de modo local"
           >
-            <Feather name="x" size={16} color={colors.text.muted} />
+            <Feather name="x" size={13} color={colors.text.muted} />
           </TouchableOpacity>
         </View>
-      ) : isTranscribing ? (
-        <View style={styles.transcribingRow}>
-          <ActivityIndicator size="small" color={colors.amber.DEFAULT} />
-          <Text style={[styles.transcribingText, { color: colors.amber.DEFAULT }]}>
-            Transcrevendo memória…
-          </Text>
-        </View>
-      ) : (
-        <TextInput
-          ref={inputRef}
-          value={value}
-          onChangeText={onChangeText}
-          placeholder="Registre uma memória..."
-          placeholderTextColor={colors.text.muted}
-          multiline
-          scrollEnabled={true}
-          style={[
-            styles.input,
-            {
-              color: colors.text.primary,
-            },
-          ]}
-          maxLength={4000}
-        />
       )}
 
-      {/* Ações da Direita: Ícone de Voz + Botão Circular de Ação */}
-      <View style={styles.rightGroup}>
-        {/* Ícone de microfone limpo */}
+      <View
+        style={[
+          styles.capsule,
+          {
+            backgroundColor: colors.bg.surface,
+            borderColor: colors.border.DEFAULT,
+            shadowColor: isDark ? '#000000' : '#3A3228',
+          },
+        ]}
+      >
+        {/* Ícone '+' à esquerda: discreto, limpo, sem moldura artificial */}
         <TouchableOpacity
-          onPress={handleToggleVoice}
+          onPress={onOpenFullSheet}
           style={styles.iconBtn}
-          disabled={isTranscribing}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={isRecording ? 'Parar e transcrever' : 'Gravar por voz'}
+          accessibilityLabel="Abrir formulário completo de registro"
         >
-          {isRecording ? (
-            <Feather name="square" size={18} color={colors.error} />
-          ) : (
-            <Feather
-              name="mic"
-              size={19}
-              color={isTranscribing ? colors.text.muted : colors.text.secondary}
-            />
-          )}
+          <Feather name="plus" size={20} color={colors.text.secondary} />
         </TouchableOpacity>
 
-        {/* Botão de Envio Circular — Fiel à imagem de referência */}
-        <TouchableOpacity
-          onPress={onSubmit}
-          disabled={!canSubmit}
-          style={[
-            styles.circleBtn,
-            {
-              backgroundColor: canSubmit
-                ? colors.amber.DEFAULT
-                : colors.bg.raised,
-              opacity: canSubmit ? 1 : 0.45,
-            },
-          ]}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Registrar memória"
-        >
-          {isSubmitting ? (
-            <ActivityIndicator size="small" color={colors.text.onAmber} />
-          ) : (
-            <Feather
-              name="arrow-up"
-              size={19}
-              color={canSubmit ? colors.text.onAmber : colors.text.muted}
+        {/* Área Central: Entrada de texto OU Estado de gravação/transcrição */}
+        {isRecording ? (
+          <View style={styles.recordingRow}>
+            <Animated.View
+              style={[
+                styles.recordingDot,
+                {
+                  backgroundColor: colors.error,
+                  transform: [{ scale: pulseAnim }],
+                },
+              ]}
             />
-          )}
-        </TouchableOpacity>
+            {isLocalLiveDictation ? (
+              <TextInput
+                ref={inputRef}
+                value={value}
+                onChangeText={onChangeText}
+                placeholder="Ouvindo no aparelho..."
+                placeholderTextColor={colors.text.muted}
+                multiline
+                scrollEnabled={true}
+                style={[
+                  styles.input,
+                  {
+                    color: colors.text.primary,
+                    paddingHorizontal: 0,
+                  },
+                ]}
+                maxLength={4000}
+              />
+            ) : (
+              <Text style={[styles.recordingTimerText, { color: colors.text.primary }]}>
+                Gravando {formatTimer(recordingSeconds)}
+              </Text>
+            )}
+            <TouchableOpacity
+              onPress={handleCancelVoice}
+              style={styles.cancelVoiceBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Cancelar gravação"
+            >
+              <Feather name="x" size={16} color={colors.text.muted} />
+            </TouchableOpacity>
+          </View>
+        ) : isTranscribing ? (
+          <View style={styles.transcribingRow}>
+            <ActivityIndicator size="small" color={colors.amber.DEFAULT} />
+            <Text style={[styles.transcribingText, { color: colors.amber.DEFAULT }]}>
+              {transcribeMessage || 'Transcrevendo memória…'}
+            </Text>
+          </View>
+        ) : (
+          <TextInput
+            ref={inputRef}
+            value={value}
+            onChangeText={onChangeText}
+            placeholder="Registre uma memória..."
+            placeholderTextColor={colors.text.muted}
+            multiline
+            scrollEnabled={true}
+            style={[
+              styles.input,
+              {
+                color: colors.text.primary,
+              },
+            ]}
+            maxLength={4000}
+          />
+        )}
+
+        {/* Ações da Direita: Ícone de Voz + Botão Circular de Ação */}
+        <View style={styles.rightGroup}>
+          {/* Ícone de microfone limpo */}
+          <TouchableOpacity
+            onPress={handleToggleVoice}
+            style={styles.iconBtn}
+            disabled={isTranscribing}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={isRecording ? 'Parar e transcrever' : 'Gravar por voz'}
+          >
+            {isRecording ? (
+              <Feather name="square" size={18} color={colors.error} />
+            ) : (
+              <Feather
+                name="mic"
+                size={19}
+                color={isTranscribing ? colors.text.muted : colors.text.secondary}
+              />
+            )}
+          </TouchableOpacity>
+
+          {/* Botão de Envio Circular — Fiel à imagem de referência */}
+          <TouchableOpacity
+            onPress={onSubmit}
+            disabled={!canSubmit}
+            style={[
+              styles.circleBtn,
+              {
+                backgroundColor: canSubmit
+                  ? colors.amber.DEFAULT
+                  : colors.bg.raised,
+                opacity: canSubmit ? 1 : 0.45,
+              },
+            ]}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Registrar memória"
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color={colors.text.onAmber} />
+            ) : (
+              <Feather
+                name="arrow-up"
+                size={19}
+                color={canSubmit ? colors.text.onAmber : colors.text.muted}
+              />
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    marginHorizontal: spacing['4'],
+    marginBottom: Platform.OS === 'ios' ? 8 : 6,
+    gap: 6,
+  },
+  localNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing['3'],
+    paddingVertical: spacing['2'],
+    gap: 8,
+  },
+  localNoticeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  localNoticeText: {
+    fontSize: 12,
+    lineHeight: 16,
+    flex: 1,
+  },
   capsule: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: spacing['4'],
-    marginBottom: Platform.OS === 'ios' ? 8 : 6,
     paddingLeft: 12,
     paddingRight: 6,
     paddingVertical: 5,
@@ -359,3 +545,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+
