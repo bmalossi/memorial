@@ -182,6 +182,7 @@ function isPainOfOthers(lowerSentence: string): boolean {
  */
 function detectCrisisSignal(fullText: string): { confidence: number } | null {
   const sentences = splitSentences(fullText);
+  let weakConfidence: number | null = null;
 
   for (const sentence of sentences) {
     const lower = sentence.toLowerCase();
@@ -199,11 +200,11 @@ function detectCrisisSignal(fullText: string): { confidence: number } | null {
       !isPainOfOthers(lower) &&
       CRISIS_WEAK_PATTERNS.some((pat) => pat.test(lower))
     ) {
-      return { confidence: 0.88 };
+      weakConfidence = 0.88;
     }
   }
 
-  return null;
+  return weakConfidence !== null ? { confidence: weakConfidence } : null;
 }
 
 const ANSWERED_PRAYER_PATTERNS = [
