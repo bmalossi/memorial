@@ -60,7 +60,7 @@ export interface QuotaCacheEntry {
 
 export interface LocalSpeechRecognizer {
   isAvailable(): Promise<boolean>;
-  start(callbacks?: { onPartialResult?: (text: string) => void }): Promise<void>;
+  start(callbacks?: { onPartialResult?: (text: string) => void; onError?: (err: any) => void }): Promise<void>;
   stop(): Promise<string>;
   cancel(): Promise<void>;
   transcribeAudioFile(audioUri: string, onProgress?: (p: TranscriptionProgress) => void): Promise<string>;

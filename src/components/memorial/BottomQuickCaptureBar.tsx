@@ -8,6 +8,7 @@ import {
   Platform,
   ActivityIndicator,
   Animated,
+  AppState,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme, spacing, radius } from '../../theme';
@@ -18,7 +19,7 @@ import {
   cancelNativeRecording,
 } from '../../lib/nativeAudioService';
 import { transcribeAudioUri, LocalSpeechRecognizer, decideTranscriptionEngine } from '../../lib/voiceTranscriptionService';
-import { defaultOnDeviceSpeechRecognizer } from '../../lib/onDeviceSpeechService';
+import { defaultOnDeviceSpeechRecognizer, LocalSpeechError } from '../../lib/onDeviceSpeechService';
 
 interface BottomQuickCaptureBarProps {
   value: string;
@@ -99,6 +100,16 @@ export function BottomQuickCaptureBar({
     };
   }, [recognizer]);
 
+  // Interrupções do sistema (ligação, app em segundo plano) encerram a gravação sem travar o app
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active' && isRecordingRef.current) {
+        handleCancelVoice();
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   const handleToggleVoice = async () => {
     if (isTranscribing) return;
 
@@ -119,6 +130,11 @@ export function BottomQuickCaptureBar({
           setIsLocalModeNotice(true);
         } catch (err: any) {
           console.warn('[QuickCapture] Erro ao finalizar ditado local:', err);
+          const title =
+            err?.code === 'no_speech_detected'
+              ? 'Nenhuma Fala Detectada'
+              : 'Reconhecimento de Voz';
+          onError?.(title, err.message || 'Não foi possível processar a fala gravada.');
         } finally {
           setIsTranscribing(false);
           setTranscribeMessage('');
@@ -204,8 +220,14 @@ export function BottomQuickCaptureBar({
           if (recordingTimer.current) clearInterval(recordingTimer.current);
           setIsLocalLiveDictation(false);
           setIsRecording(false);
+          const title =
+            liveErr?.code === 'language_pack_missing'
+              ? 'Pacote de Voz pt-BR'
+              : liveErr?.code === 'permission_denied'
+              ? 'Permissão de Reconhecimento'
+              : 'Reconhecimento de Voz Local';
           onError?.(
-            'Reconhecimento de Voz Local',
+            title,
             liveErr.message || 'Não foi possível iniciar o reconhecimento de voz no aparelho.'
           );
           return;

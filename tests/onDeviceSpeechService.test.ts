@@ -133,7 +133,7 @@ describe('On-Device Speech Recognition Service (expo-speech-recognition pt-BR)',
     assert.strictEqual(permissionRequested, true);
   });
 
-  it('deve lançar erro acolhedor se o Leitor negar a permissão de reconhecimento', async () => {
+  it('deve lançar erro acolhedor com opção de Ajustes se o Leitor negar a permissão de reconhecimento', async () => {
     mockModule.getPermissionsAsync = async () => ({ granted: false, status: 'denied' } as any);
     mockModule.requestPermissionsAsync = async () => ({ granted: false, status: 'denied' } as any);
 
@@ -144,8 +144,101 @@ describe('On-Device Speech Recognition Service (expo-speech-recognition pt-BR)',
         await recognizer.start();
       },
       (err: any) => {
-        return typeof err.message === 'string' && err.message.includes('permissão');
+        return (
+          err.code === 'permission_denied' &&
+          err.canOpenSettings === true &&
+          err.message.includes('Ajustes')
+        );
       }
     );
+  });
+
+  it('deve categorizar ausência do pacote pt-BR com código language_pack_missing e opção de Ajustes', async () => {
+    const recognizer = createOnDeviceSpeechRecognizer(mockModule);
+
+    mockModule.start = async () => {
+      throw { error: 'language-not-supported', message: 'Language pack pt-BR is missing for on-device recognition' };
+    };
+
+    await assert.rejects(
+      async () => {
+        await recognizer.start();
+      },
+      (err: any) => {
+        return (
+          err.code === 'language_pack_missing' &&
+          err.canOpenSettings === true &&
+          err.message.includes('português (pt-BR)')
+        );
+      }
+    );
+  });
+
+  it('deve lançar erro acolhedor de nenhuma fala audível se o Leitor parar sem ter falado', async () => {
+    const recognizer = createOnDeviceSpeechRecognizer(mockModule);
+    await recognizer.start();
+
+    // Chama stop() sem nenhum resultado emitido
+    await assert.rejects(
+      async () => {
+        await recognizer.stop();
+      },
+      (err: any) => {
+        return err.code === 'no_speech_detected' && err.message.includes('fala audível');
+      }
+    );
+  });
+
+  it('deve lançar erro acolhedor se o arquivo de áudio estiver sem fala audível', async () => {
+    const recognizer = createOnDeviceSpeechRecognizer(mockModule);
+    mockModule.start = async () => {
+      setTimeout(() => {
+        listeners['result']?.forEach((cb) =>
+          cb({ isFinal: true, results: [{ transcript: '   ' }] })
+        );
+      }, 5);
+    };
+
+    await assert.rejects(
+      async () => {
+        await recognizer.transcribeAudioFile('file:///silencio.m4a');
+      },
+      (err: any) => {
+        return err.code === 'no_speech_detected' && err.message.includes('fala audível');
+      }
+    );
+  });
+
+  it('deve tratar reconhecimento indisponível no aparelho de forma acolhedora', async () => {
+    const recognizer = createOnDeviceSpeechRecognizer(null);
+    assert.strictEqual(await recognizer.isAvailable(), false);
+
+    await assert.rejects(
+      async () => {
+        await recognizer.start();
+      },
+      (err: any) => {
+        return err.code === 'recognition_unavailable' && err.message.includes('digitar');
+      }
+    );
+  });
+
+  it('deve categorizar interrupção do sistema (ligação, app em segundo plano) como interrupted sem travar', async () => {
+    const recognizer = createOnDeviceSpeechRecognizer(mockModule);
+
+    let capturedErr: any = null;
+    await recognizer.start({
+      onError: (err) => {
+        capturedErr = err;
+      },
+    });
+
+    listeners['error']?.forEach((cb) =>
+      cb({ error: 'audio-interrupted', message: 'Audio session interrupted by phone call' })
+    );
+
+    assert.ok(capturedErr !== null);
+    assert.strictEqual(capturedErr.code, 'interrupted');
+    assert.ok(capturedErr.message.includes('interrupção'));
   });
 });

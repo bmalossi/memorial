@@ -62,12 +62,12 @@ Work the **frontier**: any ticket whose blockers are all done. Os tickets 3, 4, 
 
 **Blocked by:** Ditado local on-device no Novo Registro
 
-- [ ] Permissão negada: mensagem simples com caminho para os Ajustes.
-- [ ] Pacote pt-BR offline ausente: explicação e opção de baixar ou digitar.
-- [ ] Reconhecimento indisponível no aparelho: mensagem acolhedora e opção de digitar.
-- [ ] Fala vazia ou inaudível: mensagem de "nenhuma fala audível" incentivando tentar de novo.
-- [ ] Interrupção por ligação ou pelo sistema encerra a captura sem travar o app.
-- [ ] Testes cobrem os casos que não dependem de aparelho.
+- [x] Permissão negada: mensagem simples com caminho para os Ajustes.
+- [x] Pacote pt-BR offline ausente: explicação e opção de baixar ou digitar.
+- [x] Reconhecimento indisponível no aparelho: mensagem acolhedora e opção de digitar.
+- [x] Fala vazia ou inaudível: mensagem de "nenhuma fala audível" incentivando tentar de novo.
+- [x] Interrupção por ligação ou pelo sistema encerra a captura sem travar o app.
+- [x] Testes cobrem os casos que não dependem de aparelho.
 
 ## Telemetria cega do modo local
 

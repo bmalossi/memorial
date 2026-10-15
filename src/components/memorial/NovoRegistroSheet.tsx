@@ -14,6 +14,8 @@ import {
   ActivityIndicator,
   Alert,
   Keyboard,
+  AppState,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -24,7 +26,10 @@ import {
   cancelNativeRecording,
 } from '../../lib/nativeAudioService';
 import { transcribeAudioUri, decideTranscriptionEngine } from '../../lib/voiceTranscriptionService';
-import { defaultOnDeviceSpeechRecognizer } from '../../lib/onDeviceSpeechService';
+import {
+  defaultOnDeviceSpeechRecognizer,
+  LocalSpeechError,
+} from '../../lib/onDeviceSpeechService';
 
 import { useTheme, ColorTokens, typography, spacing, radius, getThemedShadows, components } from '../../theme';
 import { MemorialCategory } from '../../lib/supabase';
@@ -155,6 +160,19 @@ export function NovoRegistroSheet({
       recordingPulse.setValue(1);
     }
   }, [isRecording]);
+
+  const isRecordingRef = useRef(false);
+  isRecordingRef.current = isRecording;
+
+  // Interrupções do sistema (ligação, app em segundo plano) encerram a gravação sem travar o app
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active' && isRecordingRef.current) {
+        cancelVoiceRecording();
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   // Animação de subida do sheet
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -294,14 +312,29 @@ export function NovoRegistroSheet({
           if (recordingTimer.current) clearInterval(recordingTimer.current);
           setIsLocalLiveDictation(false);
           setIsRecording(false);
+          const isPermissionOrPackage =
+            liveErr instanceof LocalSpeechError && liveErr.canOpenSettings;
           setAudioDialog({
             visible: true,
-            title: 'Reconhecimento de Voz Local',
-            message: liveErr.message || 'Não foi possível iniciar o reconhecimento de voz no aparelho.',
-            icon: 'alert-circle',
-            confirmLabel: 'Entendido',
-            cancelLabel: '',
-            destructive: true,
+            title:
+              liveErr?.code === 'language_pack_missing'
+                ? 'Pacote de Voz pt-BR'
+                : liveErr?.code === 'permission_denied'
+                ? 'Permissão de Voz Necessária'
+                : 'Reconhecimento de Voz Local',
+            message:
+              liveErr.message ||
+              'Não foi possível iniciar o reconhecimento de voz no aparelho.',
+            icon: isPermissionOrPackage ? 'settings' : 'alert-circle',
+            confirmLabel: isPermissionOrPackage ? 'Abrir Ajustes' : 'Entendido',
+            cancelLabel: isPermissionOrPackage ? 'Digitar Relato' : '',
+            destructive: !isPermissionOrPackage,
+            onConfirm: () => {
+              setAudioDialog((prev) => ({ ...prev, visible: false }));
+              if (isPermissionOrPackage) {
+                Linking.openSettings().catch(() => {});
+              }
+            },
           });
           return;
         }
@@ -322,8 +355,12 @@ export function NovoRegistroSheet({
           title: 'Permissão de Microfone',
           message: 'O Memorial precisa de autorização de microfone para registrar seus testemunhos por voz.',
           icon: 'mic-off',
-          confirmLabel: 'Entendido',
-          cancelLabel: '',
+          confirmLabel: 'Abrir Ajustes',
+          cancelLabel: 'Digitar Relato',
+          onConfirm: () => {
+            setAudioDialog((prev) => ({ ...prev, visible: false }));
+            Linking.openSettings().catch(() => {});
+          },
         });
       } else {
         setAudioDialog({
@@ -357,6 +394,19 @@ export function NovoRegistroSheet({
         setIsLocalModeNotice(true);
       } catch (err: any) {
         console.warn('Erro ao finalizar ditado local:', err);
+        setAudioDialog({
+          visible: true,
+          title:
+            err?.code === 'no_speech_detected'
+              ? 'Nenhuma Fala Detectada'
+              : 'Reconhecimento de Voz',
+          message:
+            err.message ||
+            'Não foi possível processar a fala. Tente novamente ou digite seu relato.',
+          icon: 'mic',
+          confirmLabel: 'Entendido',
+          cancelLabel: '',
+        });
       } finally {
         setIsTranscribing(false);
         setTranscribeMessage('');

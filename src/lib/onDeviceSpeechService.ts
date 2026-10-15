@@ -12,6 +12,114 @@ import {
   setLocalSpeechRecognizer,
 } from './voiceTranscriptionService';
 
+export type LocalSpeechErrorCode =
+  | 'permission_denied'
+  | 'language_pack_missing'
+  | 'recognition_unavailable'
+  | 'no_speech_detected'
+  | 'interrupted'
+  | 'unknown';
+
+export class LocalSpeechError extends Error {
+  readonly code: LocalSpeechErrorCode;
+  readonly canOpenSettings: boolean;
+
+  constructor(
+    message: string,
+    options: {
+      code: LocalSpeechErrorCode;
+      canOpenSettings?: boolean;
+      cause?: unknown;
+    }
+  ) {
+    super(message);
+    this.name = 'LocalSpeechError';
+    this.code = options.code;
+    this.canOpenSettings = !!options.canOpenSettings;
+    if (options.cause !== undefined) {
+      this.cause = options.cause;
+    }
+  }
+}
+
+export function categorizeSpeechError(err: any): LocalSpeechError {
+  if (err instanceof LocalSpeechError) return err;
+
+  const msg = (err?.message || err?.error || '').toLowerCase();
+  const code = (err?.code || err?.error || '').toLowerCase();
+
+  if (
+    msg.includes('permission') ||
+    msg.includes('permissão') ||
+    code === 'insufficient-permissions' ||
+    code === 'not-permitted' ||
+    code === 'denied'
+  ) {
+    return new LocalSpeechError(
+      'Para ditar suas memórias no aparelho, ative o microfone e o reconhecimento de voz nos Ajustes do sistema. Você também pode digitar seu relato diretamente.',
+      { code: 'permission_denied', canOpenSettings: true, cause: err }
+    );
+  }
+
+  if (
+    msg.includes('language') ||
+    msg.includes('model') ||
+    msg.includes('pacote') ||
+    msg.includes('offline') ||
+    code === 'language-not-supported' ||
+    code === 'language-unavailable'
+  ) {
+    return new LocalSpeechError(
+      'O pacote de idioma em português (pt-BR) para reconhecimento offline não foi encontrado no aparelho. Baixe o pacote nos Ajustes ou digite seu relato.',
+      { code: 'language_pack_missing', canOpenSettings: true, cause: err }
+    );
+  }
+
+  if (
+    msg.includes('no-speech') ||
+    msg.includes('no_speech') ||
+    msg.includes('no match') ||
+    msg.includes('timeout') ||
+    code === 'speech-timeout' ||
+    code === 'no-match'
+  ) {
+    return new LocalSpeechError(
+      'Nenhuma fala audível detectada. Tente falar um pouco mais alto ou próximo ao microfone.',
+      { code: 'no_speech_detected', cause: err }
+    );
+  }
+
+  if (
+    msg.includes('interrupt') ||
+    msg.includes('busy') ||
+    msg.includes('ligação') ||
+    code === 'interrupted' ||
+    code === 'audio-interrupted'
+  ) {
+    return new LocalSpeechError(
+      'A gravação de voz foi pausada por uma interrupção do aparelho.',
+      { code: 'interrupted', cause: err }
+    );
+  }
+
+  if (
+    msg.includes('indisponível') ||
+    msg.includes('unavailable') ||
+    msg.includes('not available') ||
+    code === 'recognition_unavailable'
+  ) {
+    return new LocalSpeechError(
+      'O reconhecimento de voz local não está disponível neste dispositivo. Fique à vontade para digitar sua reflexão.',
+      { code: 'recognition_unavailable', cause: err }
+    );
+  }
+
+  return new LocalSpeechError(
+    err?.message || 'Não foi possível concluir o reconhecimento de voz no aparelho. Você pode digitar seu relato.',
+    { code: 'unknown', cause: err }
+  );
+}
+
 export interface OnDeviceSpeechModuleLike {
   isRecognitionAvailable(): Promise<boolean>;
   getPermissionsAsync?(): Promise<{ granted: boolean; status?: string }>;
@@ -53,17 +161,26 @@ export function createOnDeviceSpeechRecognizer(
 
   const ensurePermissions = async () => {
     if (!nativeModule) {
-      throw new Error('Reconhecimento de voz no aparelho não está disponível neste dispositivo.');
+      throw new LocalSpeechError(
+        'O reconhecimento de voz local não está disponível neste dispositivo. Fique à vontade para digitar sua reflexão.',
+        { code: 'recognition_unavailable' }
+      );
     }
     if (typeof nativeModule.getPermissionsAsync === 'function') {
       const current = await nativeModule.getPermissionsAsync();
       if (!current.granted && typeof nativeModule.requestPermissionsAsync === 'function') {
         const req = await nativeModule.requestPermissionsAsync();
         if (!req.granted) {
-          throw new Error('O Memorial precisa de permissão de microfone e reconhecimento de voz para capturar suas reflexões.');
+          throw new LocalSpeechError(
+            'Para ditar suas memórias no aparelho, ative o microfone e o reconhecimento de voz nos Ajustes do sistema. Você também pode digitar seu relato diretamente.',
+            { code: 'permission_denied', canOpenSettings: true }
+          );
         }
       } else if (!current.granted && typeof nativeModule.requestPermissionsAsync !== 'function') {
-        throw new Error('Permissão de microfone ou reconhecimento de voz não concedida.');
+        throw new LocalSpeechError(
+          'Para ditar suas memórias no aparelho, ative o microfone e o reconhecimento de voz nos Ajustes do sistema. Você também pode digitar seu relato diretamente.',
+          { code: 'permission_denied', canOpenSettings: true }
+        );
       }
     }
   };
@@ -80,9 +197,12 @@ export function createOnDeviceSpeechRecognizer(
       }
     },
 
-    async start(callbacks?: { onPartialResult?: (text: string) => void }): Promise<void> {
+    async start(callbacks?: { onPartialResult?: (text: string) => void; onError?: (err: any) => void }): Promise<void> {
       if (!nativeModule) {
-        throw new Error('Módulo de reconhecimento de voz local indisponível.');
+        throw new LocalSpeechError(
+          'O reconhecimento de voz local não está disponível neste dispositivo. Fique à vontade para digitar sua reflexão.',
+          { code: 'recognition_unavailable' }
+        );
       }
 
       await ensurePermissions();
@@ -104,22 +224,28 @@ export function createOnDeviceSpeechRecognizer(
       });
 
       const errorSub = nativeModule.addListener('error', (event: any) => {
-        const errMessage = event?.message || 'Falha no reconhecimento de voz local.';
+        const err = categorizeSpeechError(event);
+        callbacks?.onError?.(err);
         if (activeReject) {
-          activeReject(new Error(errMessage));
+          activeReject(err);
           activeReject = null;
         }
       });
 
       activeListeners.push(resultSub, errorSub);
 
-      await nativeModule.start({
-        lang: 'pt-BR',
-        interimResults: true,
-        continuous: true,
-        requiresOnDeviceRecognition: true,
-        addsPunctuation: true,
-      });
+      try {
+        await nativeModule.start({
+          lang: 'pt-BR',
+          interimResults: true,
+          continuous: true,
+          requiresOnDeviceRecognition: true,
+          addsPunctuation: true,
+        });
+      } catch (startErr) {
+        cleanupListeners();
+        throw categorizeSpeechError(startErr);
+      }
     },
 
     async stop(): Promise<string> {
@@ -130,6 +256,14 @@ export function createOnDeviceSpeechRecognizer(
       } catch {}
 
       cleanupListeners();
+
+      if (!currentTranscript.trim()) {
+        throw new LocalSpeechError(
+          'Nenhuma fala audível detectada. Tente falar um pouco mais alto ou próximo ao microfone.',
+          { code: 'no_speech_detected' }
+        );
+      }
+
       return currentTranscript;
     },
 
@@ -149,7 +283,10 @@ export function createOnDeviceSpeechRecognizer(
       onProgress?: (p: TranscriptionProgress) => void
     ): Promise<string> {
       if (!nativeModule) {
-        throw new Error('Reconhecimento de voz local indisponível para transcrever arquivo.');
+        throw new LocalSpeechError(
+          'O reconhecimento de voz local não está disponível neste dispositivo. Fique à vontade para digitar sua reflexão.',
+          { code: 'recognition_unavailable' }
+        );
       }
 
       await ensurePermissions();
@@ -173,13 +310,22 @@ export function createOnDeviceSpeechRecognizer(
           }
           if (event.isFinal) {
             cleanupListeners();
-            resolve(fileTranscript);
+            if (!fileTranscript.trim()) {
+              reject(
+                new LocalSpeechError(
+                  'Nenhuma fala audível detectada no áudio gravado. Tente falar um pouco mais próximo ao microfone.',
+                  { code: 'no_speech_detected' }
+                )
+              );
+            } else {
+              resolve(fileTranscript);
+            }
           }
         });
 
         const errorSub = nativeModule.addListener('error', (event: any) => {
           cleanupListeners();
-          reject(new Error(event?.message || 'Falha ao transcrever arquivo de áudio localmente.'));
+          reject(categorizeSpeechError(event));
         });
 
         activeListeners.push(resultSub, errorSub);
@@ -192,7 +338,7 @@ export function createOnDeviceSpeechRecognizer(
           });
         } catch (startErr) {
           cleanupListeners();
-          reject(startErr);
+          reject(categorizeSpeechError(startErr));
         }
       });
     },
