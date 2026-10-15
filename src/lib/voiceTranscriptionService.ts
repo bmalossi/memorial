@@ -66,14 +66,59 @@ export interface LocalSpeechRecognizer {
   transcribeAudioFile(audioUri: string, onProgress?: (p: TranscriptionProgress) => void): Promise<string>;
 }
 
+export interface BlindLocalModeTelemetryEvent {
+  platform: 'android' | 'ios' | 'web' | 'unknown';
+  created_at: string;
+  mode: 'local_speech';
+}
+
+export function buildBlindLocalModeTelemetryPayload(platform?: string): BlindLocalModeTelemetryEvent {
+  let plat: any = platform;
+  if (!plat) {
+    try {
+      const { Platform } = require('react-native');
+      plat = Platform?.OS;
+    } catch {}
+  }
+  const normalizedPlatform = ['android', 'ios', 'web'].includes(plat) ? plat : 'unknown';
+  return {
+    platform: normalizedPlatform,
+    created_at: new Date().toISOString(),
+    mode: 'local_speech',
+  };
+}
+
 export interface TranscriptionServiceDependencies {
   fetchFn?: typeof fetch;
   localRecognizer?: LocalSpeechRecognizer;
   uploader?: (audioUri: string, uploadUrl: string) => Promise<boolean>;
   networkChecker?: () => Promise<boolean>;
+  telemetryEmitter?: (payload: BlindLocalModeTelemetryEvent) => Promise<void>;
 }
 
 let activeDependencies: TranscriptionServiceDependencies = {};
+
+export async function emitBlindLocalModeTelemetry(platform?: string): Promise<void> {
+  try {
+    const payload = buildBlindLocalModeTelemetryPayload(platform);
+    if (activeDependencies.telemetryEmitter) {
+      await activeDependencies.telemetryEmitter(payload);
+      return;
+    }
+    // Em ambiente Node.js / testes de unidade, não aciona o cliente Supabase sem emitter
+    if (typeof process !== 'undefined' && process.versions?.node) {
+      return;
+    }
+    try {
+      const { supabase } = require('./supabase');
+      if (supabase && typeof supabase.from === 'function') {
+        await supabase.from('stt_telemetry_events').insert(payload);
+      }
+    } catch {}
+  } catch {
+    // Invariante absoluta (ADR 0001): falha na telemetria NUNCA afeta a experiência do Leitor
+  }
+}
 
 let quotaCache: QuotaCacheEntry | null = null;
 const DEFAULT_AVAILABLE_CACHE_TTL_MS = 60 * 1000; // 60s
@@ -263,6 +308,8 @@ async function handleQuotaExceededFallback(
     status: 'local',
     message: 'Cota de transcrição na nuvem atingida. Transcrevendo no aparelho...',
   });
+
+  emitBlindLocalModeTelemetry().catch(() => {});
 
   return await localRecognizer.transcribeAudioFile(audioUri, onProgress);
 }

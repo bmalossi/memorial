@@ -10,6 +10,7 @@ import {
   LocalSpeechRecognizer,
   TranscriptionProgress,
   setLocalSpeechRecognizer,
+  emitBlindLocalModeTelemetry,
 } from './voiceTranscriptionService';
 
 export type LocalSpeechErrorCode =
@@ -264,6 +265,7 @@ export function createOnDeviceSpeechRecognizer(
         );
       }
 
+      emitBlindLocalModeTelemetry().catch(() => {});
       return currentTranscript;
     },
 
@@ -318,6 +320,7 @@ export function createOnDeviceSpeechRecognizer(
                 )
               );
             } else {
+              emitBlindLocalModeTelemetry().catch(() => {});
               resolve(fileTranscript);
             }
           }

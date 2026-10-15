@@ -641,4 +641,83 @@ describe('Voice Transcription Service (Blindagem Cloudflare & Zero Client Secret
       resetTranscriptionDependencies();
     }
   });
+
+  describe('Telemetria Cega do Modo Local (ADR-0001)', () => {
+    it('o payload do evento deve conter apenas data e plataforma, sem user_id, email, hash, texto ou áudio', async () => {
+      const { buildBlindLocalModeTelemetryPayload } = await import('../src/lib/voiceTranscriptionService');
+
+      const payload: any = buildBlindLocalModeTelemetryPayload('android');
+
+      assert.strictEqual(payload.platform, 'android');
+      assert.strictEqual(payload.mode, 'local_speech');
+      assert.ok(typeof payload.created_at === 'string' && payload.created_at.length > 0);
+
+      // Invariantes estritas de privacidade
+      assert.strictEqual(payload.user_id, undefined);
+      assert.strictEqual(payload.email, undefined);
+      assert.strictEqual(payload.hash, undefined);
+      assert.strictEqual(payload.text, undefined);
+      assert.strictEqual(payload.audio, undefined);
+      assert.strictEqual(payload.audio_url, undefined);
+      assert.strictEqual(payload.transcript, undefined);
+    });
+
+    it('falha no envio da telemetria nunca deve lançar erro nem afetar a execução', async () => {
+      const { emitBlindLocalModeTelemetry, setTranscriptionDependencies, resetTranscriptionDependencies } = await import('../src/lib/voiceTranscriptionService');
+
+      setTranscriptionDependencies({
+        telemetryEmitter: async () => {
+          throw new Error('Falha de rede ou timeout na telemetria');
+        },
+      });
+
+      try {
+        // Não deve rejeitar nem lançar erro
+        await emitBlindLocalModeTelemetry('ios');
+      } finally {
+        resetTranscriptionDependencies();
+      }
+    });
+
+    it('ao acionar o fallback por cota estourada, o evento de telemetria cega deve ser emitido', async () => {
+      const { transcribeAudioUri, setTranscriptionDependencies, resetTranscriptionDependencies } = await import('../src/lib/voiceTranscriptionService');
+
+      let telemetryEmitted = false;
+      let emittedPayload: any = null;
+
+      const mockRecognizer = {
+        isAvailable: async () => true,
+        start: async () => {},
+        stop: async () => '',
+        cancel: async () => {},
+        transcribeAudioFile: async () => 'transcrição local do teste',
+      };
+
+      const mockFetch = async () => {
+        return new Response(JSON.stringify({ error: 'Cota esgotada', code: 'quota_exceeded' }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      };
+
+      setTranscriptionDependencies({
+        fetchFn: mockFetch as any,
+        localRecognizer: mockRecognizer,
+        telemetryEmitter: async (payload) => {
+          telemetryEmitted = true;
+          emittedPayload = payload;
+        },
+      });
+
+      try {
+        const text = await transcribeAudioUri('https://cdn.bibliavive.com.br/sample.m4a');
+        assert.strictEqual(text, 'transcrição local do teste');
+        assert.strictEqual(telemetryEmitted, true);
+        assert.strictEqual(emittedPayload?.mode, 'local_speech');
+        assert.strictEqual(emittedPayload?.user_id, undefined);
+      } finally {
+        resetTranscriptionDependencies();
+      }
+    });
+  });
 });

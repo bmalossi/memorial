@@ -75,6 +75,6 @@ Work the **frontier**: any ticket whose blockers are all done. Os tickets 3, 4, 
 
 **Blocked by:** Ditado local on-device no Novo Registro
 
-- [ ] Evento contém apenas data e plataforma, sem `user_id`, e-mail ou hash.
-- [ ] Nenhum conteúdo de áudio ou texto é registrado.
-- [ ] Falha no envio da telemetria nunca afeta a captura de voz.
+- [x] Evento contém apenas data e plataforma, sem `user_id`, e-mail ou hash.
+- [x] Nenhum conteúdo de áudio ou texto é registrado.
+- [x] Falha no envio da telemetria nunca afeta a captura de voz.
