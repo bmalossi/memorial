@@ -11,6 +11,27 @@ const STT_API_URL =
   process.env.EXPO_PUBLIC_STT_API_URL ||
   'https://www.bibliavive.com.br/api/stt';
 
+export const CODE_QUOTA_EXCEEDED = 'quota_exceeded';
+
+export class TranscriptionError extends Error {
+  readonly status?: number;
+  readonly code?: string;
+
+  constructor(message: string, options?: { status?: number; code?: string; cause?: unknown }) {
+    super(message);
+    this.name = 'TranscriptionError';
+    this.status = options?.status;
+    this.code = options?.code;
+    if (options?.cause !== undefined) {
+      this.cause = options.cause;
+    }
+  }
+
+  get isQuotaExceeded(): boolean {
+    return this.code === CODE_QUOTA_EXCEEDED;
+  }
+}
+
 export interface TranscriptionProgress {
   status: 'uploading' | 'transcribing' | 'completed' | 'local' | 'error';
   message: string;
@@ -48,27 +69,36 @@ function getFetch(): typeof fetch {
   return activeDependencies.fetchFn || fetch;
 }
 
-async function checkQuotaExceededResponse(res: Response): Promise<boolean> {
-  if (res.status === 429) {
-    try {
-      const cloned = typeof res.clone === 'function' ? res.clone() : res;
-      const data = await cloned.json();
-      if (data && data.code === 'quota_exceeded') {
-        return true;
-      }
-    } catch {}
-  }
-  return false;
-}
+async function parseResponseError(res: Response, defaultMsg: string): Promise<TranscriptionError> {
+  let message = defaultMsg;
+  let code: string | undefined;
 
-async function extractErrorMessage(res: Response, defaultMsg: string): Promise<string> {
   try {
     const cloned = typeof res.clone === 'function' ? res.clone() : res;
     const data = await cloned.json();
-    return data.error || data.message || (data.code ? `[${data.code}] ${defaultMsg}` : defaultMsg);
+    if (data && typeof data === 'object') {
+      if (typeof data.code === 'string') {
+        code = data.code;
+      }
+      if (typeof data.error === 'string') {
+        message = data.error;
+      } else if (typeof data.message === 'string') {
+        message = data.message;
+      }
+    }
   } catch {
-    return defaultMsg;
+    // Resposta não é JSON válido: preserva defaultMsg
   }
+
+  return new TranscriptionError(message, { status: res.status, code });
+}
+
+async function checkQuotaExceededResponse(res: Response): Promise<boolean> {
+  if (res.status === 429) {
+    const err = await parseResponseError(res, '');
+    return err.isQuotaExceeded;
+  }
+  return false;
 }
 
 async function handleQuotaExceededFallback(
@@ -77,7 +107,10 @@ async function handleQuotaExceededFallback(
 ): Promise<string> {
   const localRecognizer = activeDependencies.localRecognizer;
   if (!localRecognizer) {
-    throw new Error('Limite de transcrições premium atingido para este período e nenhum motor de reconhecimento local está disponível.');
+    throw new TranscriptionError(
+      'Limite de transcrições premium atingido para este período e nenhum motor de reconhecimento local está disponível.',
+      { status: 429, code: CODE_QUOTA_EXCEEDED }
+    );
   }
 
   onProgress?.({
@@ -241,16 +274,21 @@ async function uploadDirectToSTT(audioUri: string, endpoint: string): Promise<st
         if (data.id) return data.id;
       }
       if (res.status === 429 && res.body) {
-        const data = JSON.parse(res.body);
-        if (data.code === 'quota_exceeded') {
-          const err: any = new Error('quota_exceeded');
-          err.code = 'quota_exceeded';
-          throw err;
+        try {
+          const data = JSON.parse(res.body);
+          if (data.code === CODE_QUOTA_EXCEEDED) {
+            throw new TranscriptionError(data.error || 'quota_exceeded', {
+              status: 429,
+              code: CODE_QUOTA_EXCEEDED,
+            });
+          }
+        } catch (parseErr) {
+          if (parseErr instanceof TranscriptionError) throw parseErr;
         }
       }
     }
-  } catch (err: any) {
-    if (err.code === 'quota_exceeded') throw err;
+  } catch (err: unknown) {
+    if (err instanceof TranscriptionError) throw err;
   }
 
   // Tentativa 2: file.bytes() -> fetch POST
@@ -267,9 +305,7 @@ async function uploadDirectToSTT(audioUri: string, endpoint: string): Promise<st
             body: bytes,
           });
           if (await checkQuotaExceededResponse(res)) {
-            const err: any = new Error('quota_exceeded');
-            err.code = 'quota_exceeded';
-            throw err;
+            throw await parseResponseError(res, 'Cota de transcrições premium atingida.');
           }
           if (res.ok) {
             const data = await res.json();
@@ -278,8 +314,8 @@ async function uploadDirectToSTT(audioUri: string, endpoint: string): Promise<st
         }
       }
     }
-  } catch (err: any) {
-    if (err.code === 'quota_exceeded') throw err;
+  } catch (err: unknown) {
+    if (err instanceof TranscriptionError) throw err;
   }
 
   throw new Error('Não foi possível enviar o áudio gravado para o serviço de transcrição.');
@@ -314,8 +350,7 @@ export async function transcribeAudioUri(
       }
 
       if (!submitRes.ok) {
-        const errorMsg = await extractErrorMessage(submitRes, `Erro ${submitRes.status} no serviço de transcrição.`);
-        throw new Error(errorMsg);
+        throw await parseResponseError(submitRes, `Erro ${submitRes.status} no serviço de transcrição.`);
       }
 
       const submitData = await submitRes.json();
@@ -360,26 +395,17 @@ export async function transcribeAudioUri(
                 const submitData = await submitRes.json();
                 transcriptId = submitData.id || null;
               } else {
-                const errorMsg = await extractErrorMessage(submitRes, `Erro ${submitRes.status} no envio para transcrição.`);
-                throw new Error(errorMsg);
+                throw await parseResponseError(submitRes, `Erro ${submitRes.status} no envio para transcrição.`);
               }
             }
           }
         } else if (urlRes.status >= 500) {
-          const errorMsg = await extractErrorMessage(urlRes, `Erro ${urlRes.status} no servidor de transcrição.`);
-          throw new Error(errorMsg);
+          throw await parseResponseError(urlRes, `Erro ${urlRes.status} no servidor de transcrição.`);
         } else if (urlRes.status === 429) {
-          const errorMsg = await extractErrorMessage(urlRes, 'Muitas requisições (429).');
-          throw new Error(errorMsg);
+          throw await parseResponseError(urlRes, 'Muitas requisições (429).');
         }
-      } catch (r2Err: any) {
-        if (
-          r2Err.code === 'quota_exceeded' ||
-          r2Err.message?.includes('quota_exceeded') ||
-          r2Err.status >= 500 ||
-          r2Err.status === 429 ||
-          r2Err.message?.includes('Erro 5')
-        ) {
+      } catch (r2Err: unknown) {
+        if (r2Err instanceof TranscriptionError) {
           throw r2Err;
         }
         console.warn('[Memorial Voice] Falha ao enviar para R2 presigned, usando contingência direta:', r2Err);
@@ -389,8 +415,8 @@ export async function transcribeAudioUri(
       if (!transcriptId) {
         try {
           transcriptId = await uploadDirectToSTT(audioUri, STT_API_URL);
-        } catch (directErr: any) {
-          if (directErr.code === 'quota_exceeded') {
+        } catch (directErr: unknown) {
+          if (directErr instanceof TranscriptionError && directErr.isQuotaExceeded) {
             return await handleQuotaExceededFallback(audioUri, onProgress);
           }
           throw directErr;
@@ -421,14 +447,7 @@ export async function transcribeAudioUri(
       }
 
       if (!pollRes.ok) {
-        if (pollRes.status >= 500) {
-          const errorMsg = await extractErrorMessage(pollRes, `Erro ${pollRes.status} ao consultar status da transcrição.`);
-          throw new Error(errorMsg);
-        }
-        if (pollRes.status === 429) {
-          const errorMsg = await extractErrorMessage(pollRes, 'Muitas requisições (429).');
-          throw new Error(errorMsg);
-        }
+        // Falha transitória no polling (5xx ou 429 sem quota_exceeded): continua tentando até maxWaitMs
         continue;
       }
 
@@ -452,10 +471,11 @@ export async function transcribeAudioUri(
     }
 
     throw new Error('Tempo limite excedido aguardando a transcrição da voz.');
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Erro durante a transcrição.';
     onProgress?.({
       status: 'error',
-      message: err.message || 'Erro durante a transcrição.',
+      message,
     });
     throw err;
   }

@@ -52,7 +52,16 @@ describe('Voice Transcription Service (Blindagem Cloudflare & Zero Client Secret
     };
 
     setLocalSpeechRecognizer(mockRecognizer);
-    // Deve permitir resetar
+    assert.strictEqual(await mockRecognizer.isAvailable(), true);
+    await mockRecognizer.start();
+    assert.strictEqual(started, true);
+    const stoppedText = await mockRecognizer.stop();
+    assert.strictEqual(stopped, true);
+    assert.strictEqual(stoppedText, 'texto local');
+    await mockRecognizer.cancel();
+    assert.strictEqual(cancelled, true);
+    assert.strictEqual(await mockRecognizer.transcribeAudioFile('file:///test.m4a'), 'transcrição local do arquivo');
+
     resetTranscriptionDependencies();
   });
 
@@ -153,8 +162,86 @@ describe('Voice Transcription Service (Blindagem Cloudflare & Zero Client Secret
     }
   });
 
-  it('quando o servidor retornar 429 sem code: quota_exceeded, NÃO deve acionar o motor local (decisão estrita por code)', async () => {
+  it('quando a requisição de upload-url para arquivo local retornar 429 quota_exceeded, deve acionar motor local', async () => {
     const { transcribeAudioUri, setTranscriptionDependencies, resetTranscriptionDependencies } = await import('../src/lib/voiceTranscriptionService');
+
+    let localCalled = false;
+    const mockRecognizer = {
+      isAvailable: async () => true,
+      start: async () => {},
+      stop: async () => '',
+      cancel: async () => {},
+      transcribeAudioFile: async () => {
+        localCalled = true;
+        return 'áudio local transcrito';
+      },
+    };
+
+    const mockFetch = async (url: string | URL | Request) => {
+      const urlStr = url.toString();
+      if (urlStr.includes('action=upload-url')) {
+        return new Response(
+          JSON.stringify({ error: 'Cota estourada', code: 'quota_exceeded' }),
+          { status: 429, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response('ok', { status: 200 });
+    };
+
+    setTranscriptionDependencies({
+      fetchFn: mockFetch as any,
+      localRecognizer: mockRecognizer,
+      uploader: async () => true,
+    });
+
+    try {
+      const progressStatuses: string[] = [];
+      const result = await transcribeAudioUri('file:///caminho/local/gravacao.m4a', (p) => {
+        progressStatuses.push(p.status);
+      });
+
+      assert.strictEqual(localCalled, true);
+      assert.strictEqual(result, 'áudio local transcrito');
+      assert.ok(progressStatuses.includes('local'));
+    } finally {
+      resetTranscriptionDependencies();
+    }
+  });
+
+  it('quando o servidor retornar 429 quota_exceeded mas nenhum motor local estiver configurado, deve lançar erro informativo', async () => {
+    const { transcribeAudioUri, setTranscriptionDependencies, resetTranscriptionDependencies, TranscriptionError } = await import('../src/lib/voiceTranscriptionService');
+
+    const mockFetch = async () => {
+      return new Response(
+        JSON.stringify({
+          error: 'Limite de transcrições atingido',
+          code: 'quota_exceeded',
+        }),
+        { status: 429, headers: { 'Content-Type': 'application/json' } }
+      );
+    };
+
+    setTranscriptionDependencies({
+      fetchFn: mockFetch as any,
+      localRecognizer: undefined,
+    });
+
+    try {
+      await assert.rejects(
+        async () => {
+          await transcribeAudioUri('https://cdn.bibliavive.com.br/sample.m4a');
+        },
+        (err: any) => {
+          return err instanceof TranscriptionError && err.status === 429 && err.isQuotaExceeded;
+        }
+      );
+    } finally {
+      resetTranscriptionDependencies();
+    }
+  });
+
+  it('quando o servidor retornar 429 sem code: quota_exceeded, NÃO deve acionar o motor local (decisão estrita por code)', async () => {
+    const { transcribeAudioUri, setTranscriptionDependencies, resetTranscriptionDependencies, TranscriptionError } = await import('../src/lib/voiceTranscriptionService');
 
     let localCalled = false;
     const mockRecognizer = {
@@ -191,7 +278,7 @@ describe('Voice Transcription Service (Blindagem Cloudflare & Zero Client Secret
           await transcribeAudioUri('https://cdn.bibliavive.com.br/sample.m4a');
         },
         (err: any) => {
-          return err.message.includes('Muitas requisições') || err.message.includes('429') || err.message.includes('too_many_requests');
+          return err instanceof TranscriptionError && err.status === 429 && err.code === 'too_many_requests';
         }
       );
       assert.strictEqual(localCalled, false, 'Não deve fazer fallback se o code não for quota_exceeded');
@@ -200,8 +287,8 @@ describe('Voice Transcription Service (Blindagem Cloudflare & Zero Client Secret
     }
   });
 
-  it('erros 5xx e timeouts do servidor NÃO devem disparar o fallback automático', async () => {
-    const { transcribeAudioUri, setTranscriptionDependencies, resetTranscriptionDependencies } = await import('../src/lib/voiceTranscriptionService');
+  it('quando a requisição de upload-url retornar 503, deve lançar TranscriptionError e NÃO engolir o erro', async () => {
+    const { transcribeAudioUri, setTranscriptionDependencies, resetTranscriptionDependencies, TranscriptionError } = await import('../src/lib/voiceTranscriptionService');
 
     let localCalled = false;
     const mockRecognizer = {
@@ -211,15 +298,19 @@ describe('Voice Transcription Service (Blindagem Cloudflare & Zero Client Secret
       cancel: async () => {},
       transcribeAudioFile: async () => {
         localCalled = true;
-        return 'não deveria chamar';
+        return 'não deveria';
       },
     };
 
-    const mockFetch = async () => {
-      return new Response(
-        JSON.stringify({ error: 'Erro interno no cluster de processamento' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
+    const mockFetch = async (url: string | URL | Request) => {
+      const urlStr = url.toString();
+      if (urlStr.includes('action=upload-url')) {
+        return new Response(
+          JSON.stringify({ error: 'Cluster indisponível temporariamente' }),
+          { status: 503, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response('ok', { status: 200 });
     };
 
     setTranscriptionDependencies({
@@ -231,13 +322,89 @@ describe('Voice Transcription Service (Blindagem Cloudflare & Zero Client Secret
     try {
       await assert.rejects(
         async () => {
-          await transcribeAudioUri('https://cdn.bibliavive.com.br/sample.m4a');
+          await transcribeAudioUri('file:///caminho/local/gravacao.m4a');
         },
         (err: any) => {
-          return typeof err.message === 'string';
+          return err instanceof TranscriptionError && err.status === 503 && err.message.includes('Cluster indisponível');
         }
       );
-      assert.strictEqual(localCalled, false, 'Erro 500 não deve disparar fallback automático');
+      assert.strictEqual(localCalled, false, 'Erro 503 não deve disparar fallback nem ser engolido');
+    } finally {
+      resetTranscriptionDependencies();
+    }
+  });
+
+  it('durante o polling, uma falha temporária 504 do servidor deve continuar tentando e recuperar a transcrição', async () => {
+    const { transcribeAudioUri, setTranscriptionDependencies, resetTranscriptionDependencies } = await import('../src/lib/voiceTranscriptionService');
+
+    let pollCount = 0;
+    const mockFetch = async (url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = url.toString();
+      if (init?.method === 'POST') {
+        return new Response(JSON.stringify({ id: 'tx-poll-retry' }), { status: 200 });
+      }
+      if (urlStr.includes('id=tx-poll-retry')) {
+        pollCount++;
+        if (pollCount === 1) {
+          // Blip temporário 504
+          return new Response(JSON.stringify({ error: 'Internal gateway timeout' }), { status: 504 });
+        }
+        return new Response(JSON.stringify({ status: 'completed', text: 'O Senhor é meu pastor' }), { status: 200 });
+      }
+      return new Response('ok', { status: 200 });
+    };
+
+    setTranscriptionDependencies({
+      fetchFn: mockFetch as any,
+    });
+
+    try {
+      const result = await transcribeAudioUri('https://cdn.bibliavive.com.br/sample.m4a');
+      assert.strictEqual(result, 'O Senhor é meu pastor');
+      assert.ok(pollCount >= 2, 'Polling deve ter continuado após a falha transitória');
+    } finally {
+      resetTranscriptionDependencies();
+    }
+  });
+
+  it('durante o polling, se o servidor retornar 429 quota_exceeded, deve acionar o motor local', async () => {
+    const { transcribeAudioUri, setTranscriptionDependencies, resetTranscriptionDependencies } = await import('../src/lib/voiceTranscriptionService');
+
+    let localCalled = false;
+    const mockRecognizer = {
+      isAvailable: async () => true,
+      start: async () => {},
+      stop: async () => '',
+      cancel: async () => {},
+      transcribeAudioFile: async () => {
+        localCalled = true;
+        return 'texto local após cota estourar no polling';
+      },
+    };
+
+    const mockFetch = async (url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = url.toString();
+      if (init?.method === 'POST') {
+        return new Response(JSON.stringify({ id: 'tx-poll-quota' }), { status: 200 });
+      }
+      if (urlStr.includes('id=tx-poll-quota')) {
+        return new Response(
+          JSON.stringify({ error: 'Cota de processamento esgotada', code: 'quota_exceeded' }),
+          { status: 429, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response('ok', { status: 200 });
+    };
+
+    setTranscriptionDependencies({
+      fetchFn: mockFetch as any,
+      localRecognizer: mockRecognizer,
+    });
+
+    try {
+      const result = await transcribeAudioUri('https://cdn.bibliavive.com.br/sample.m4a');
+      assert.strictEqual(result, 'texto local após cota estourar no polling');
+      assert.strictEqual(localCalled, true);
     } finally {
       resetTranscriptionDependencies();
     }
