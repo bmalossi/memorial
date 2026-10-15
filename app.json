@@ -25,6 +25,7 @@
       "buildNumber": "15",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "O Memorial usa o microfone para transcrever seus registros espirituais por voz.",
+        "NSSpeechRecognitionUsageDescription": "O Memorial usa o reconhecimento de voz para transcrever suas reflexões diretamente no aparelho.",
         "NSCameraUsageDescription": "O Memorial usa a câmera para adicionar imagens aos seus registros."
       }
     },
@@ -80,7 +81,14 @@
         }
       ],
       "./plugins/withImmersiveMode.js",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "O Memorial usa o microfone para transcrever seus registros espirituais por voz.",
+          "speechRecognitionPermission": "O Memorial usa o reconhecimento de voz para transcrever suas reflexões diretamente no aparelho."
+        }
+      ]
     ],
     "extra": {
       "supabaseUrl": "https://yqnsaslvxmqaeeccmcmg.supabase.co",

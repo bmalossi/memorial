@@ -25,12 +25,12 @@ Work the **frontier**: any ticket whose blockers are all done. Os tickets 3, 4, 
 
 **Blocked by:** Motor de transcrição intercambiável e contrato `quota_exceeded`
 
-- [ ] Módulo de reconhecimento nativo instalado de forma compatível com a versão do SDK Expo do projeto, conforme a documentação vigente.
-- [ ] Permissões de microfone e reconhecimento de voz configuradas por config plugin, com texto acolhedor.
-- [ ] Fluxo funcional em development build, com texto parcial substituído pelo final, sem duplicatas.
-- [ ] Reconhecimento em `pt-BR` e obrigatoriamente on-device; nenhum áudio ou texto sai do aparelho.
-- [ ] Aviso de modo local exibido sem termos técnicos (`429`, `quota_exceeded`).
-- [ ] O Leitor pode cancelar a captura e editar o texto antes de salvar.
+- [x] Módulo de reconhecimento nativo instalado de forma compatível com a versão do SDK Expo do projeto, conforme a documentação vigente.
+- [x] Permissões de microfone e reconhecimento de voz configuradas por config plugin, com texto acolhedor.
+- [x] Fluxo funcional em development build, com texto parcial substituído pelo final, sem duplicatas.
+- [x] Reconhecimento em `pt-BR` e obrigatoriamente on-device; nenhum áudio ou texto sai do aparelho.
+- [x] Aviso de modo local exibido sem termos técnicos (`429`, `quota_exceeded`).
+- [x] O Leitor pode cancelar a captura e editar o texto antes de salvar.
 - [ ] Verificação manual em iOS e Android.
 
 ## Mesmo fallback na barra de captura rápida

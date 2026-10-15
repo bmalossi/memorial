@@ -24,6 +24,7 @@ import {
   cancelNativeRecording,
 } from '../../lib/nativeAudioService';
 import { transcribeAudioUri } from '../../lib/voiceTranscriptionService';
+import { defaultOnDeviceSpeechRecognizer } from '../../lib/onDeviceSpeechService';
 
 import { useTheme, ColorTokens, typography, spacing, radius, getThemedShadows, components } from '../../theme';
 import { MemorialCategory } from '../../lib/supabase';
@@ -112,6 +113,9 @@ export function NovoRegistroSheet({
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const recordingTimer = useRef<any>(null);
   const recordingPulse = useRef(new Animated.Value(1)).current;
+  const [isLocalModeNotice, setIsLocalModeNotice] = useState(false);
+  const [isLocalLiveDictation, setIsLocalLiveDictation] = useState(false);
+  const baseContentBeforeLiveRef = useRef<string>('');
 
   // Modal Editorial de Alerta e Confirmação de Áudio
   const [audioDialog, setAudioDialog] = useState<{
@@ -248,6 +252,48 @@ export function NovoRegistroSheet({
       return;
     }
 
+    // Se o modo local já estiver ativo (ex: cota na nuvem esgotada), usa ditado on-device em tempo real
+    if (isLocalModeNotice) {
+      const isAvail = await defaultOnDeviceSpeechRecognizer.isAvailable();
+      if (isAvail) {
+        try {
+          setIsLocalLiveDictation(true);
+          setIsRecording(true);
+          setRecordingSeconds(0);
+          baseContentBeforeLiveRef.current = content;
+
+          if (recordingTimer.current) clearInterval(recordingTimer.current);
+          recordingTimer.current = setInterval(() => {
+            setRecordingSeconds((prev) => prev + 1);
+          }, 1000);
+
+          await defaultOnDeviceSpeechRecognizer.start({
+            onPartialResult: (partialText) => {
+              const base = baseContentBeforeLiveRef.current.trim();
+              if (partialText) {
+                setContent(base ? `${base}\n\n${partialText}` : partialText);
+              }
+            },
+          });
+          return;
+        } catch (liveErr: any) {
+          if (recordingTimer.current) clearInterval(recordingTimer.current);
+          setIsLocalLiveDictation(false);
+          setIsRecording(false);
+          setAudioDialog({
+            visible: true,
+            title: 'Reconhecimento de Voz Local',
+            message: liveErr.message || 'Não foi possível iniciar o reconhecimento de voz no aparelho.',
+            icon: 'alert-circle',
+            confirmLabel: 'Entendido',
+            cancelLabel: '',
+            destructive: true,
+          });
+          return;
+        }
+      }
+    }
+
     try {
       setRecordingSeconds(0);
       setIsRecording(true);
@@ -280,6 +326,31 @@ export function NovoRegistroSheet({
   };
 
   const handleStopAndTranscribe = async () => {
+    // Finalização do ditado local on-device
+    if (isLocalLiveDictation) {
+      try {
+        if (recordingTimer.current) clearInterval(recordingTimer.current);
+        setIsRecording(false);
+        setIsLocalLiveDictation(false);
+        setIsTranscribing(true);
+        setTranscribeMessage('Finalizando reconhecimento no aparelho...');
+
+        const finalText = await defaultOnDeviceSpeechRecognizer.stop();
+        const base = baseContentBeforeLiveRef.current.trim();
+        if (finalText && finalText.trim()) {
+          setContent(base ? `${base}\n\n${finalText.trim()}` : finalText.trim());
+        }
+        setIsLocalModeNotice(true);
+      } catch (err: any) {
+        console.warn('Erro ao finalizar ditado local:', err);
+      } finally {
+        setIsTranscribing(false);
+        setTranscribeMessage('');
+        setRecordingSeconds(0);
+      }
+      return;
+    }
+
     try {
       setIsRecording(false);
       setIsTranscribing(true);
@@ -287,9 +358,12 @@ export function NovoRegistroSheet({
 
       const audioUri = await stopNativeRecording();
 
-      setTranscribeMessage('Enviando para AssemblyAI...');
+      setTranscribeMessage('Transcrevendo relato...');
       const transcript = await transcribeAudioUri(audioUri, (p) => {
         setTranscribeMessage(p.message);
+        if (p.status === 'local') {
+          setIsLocalModeNotice(true);
+        }
       });
 
       if (transcript && transcript.trim()) {
@@ -316,6 +390,18 @@ export function NovoRegistroSheet({
   };
 
   const cancelVoiceRecording = async () => {
+    if (isLocalLiveDictation) {
+      try {
+        if (recordingTimer.current) clearInterval(recordingTimer.current);
+        await defaultOnDeviceSpeechRecognizer.cancel();
+      } catch {}
+      setContent(baseContentBeforeLiveRef.current);
+      setIsRecording(false);
+      setIsLocalLiveDictation(false);
+      setRecordingSeconds(0);
+      return;
+    }
+
     try {
       await cancelNativeRecording();
     } catch {}
@@ -648,7 +734,9 @@ export function NovoRegistroSheet({
                         ]}
                       />
                       <Text style={s.recordingStatusText}>
-                        Gravando áudio ({formatTimer(recordingSeconds)})... Toque em Parar para transcrever.
+                        {isLocalLiveDictation
+                          ? `Falando no modo local (${formatTimer(recordingSeconds)})... O texto aparece em tempo real.`
+                          : `Gravando áudio (${formatTimer(recordingSeconds)})... Toque em Parar para transcrever.`}
                       </Text>
                     </View>
                     <TouchableOpacity
@@ -669,6 +757,25 @@ export function NovoRegistroSheet({
                     <Text style={s.transcribingStatusText}>
                       {transcribeMessage || 'Transcrevendo relato por voz...'}
                     </Text>
+                  </View>
+                )}
+
+                {/* ── Aviso Sereno de Modo Local (On-Device) ── */}
+                {isLocalModeNotice && (
+                  <View style={s.localNoticeBanner}>
+                    <View style={s.localNoticeContent}>
+                      <Feather name="shield" size={13} color={colors.amber.DEFAULT} />
+                      <Text style={s.localNoticeText}>
+                        Modo local ativo: transcrito no aparelho em pt-BR. Vale revisar o texto.
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setIsLocalModeNotice(false)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Fechar aviso de modo local"
+                    >
+                      <Feather name="x" size={13} color={colors.text.muted} />
+                    </TouchableOpacity>
                   </View>
                 )}
 
@@ -1467,6 +1574,33 @@ function getSheetStyles(colors: ColorTokens, isDark: boolean) {
     lineHeight:  20,
     fontStyle:   'italic',
     fontFamily:  Platform.OS === 'ios' ? 'Georgia' : 'serif',
+  },
+
+  // ── Aviso Sereno de Modo Local (On-Device) ──
+  localNoticeBanner: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
+    backgroundColor:   colors.bg.subtle,
+    borderRadius:      radius.md,
+    borderWidth:       1,
+    borderColor:       colors.border.active,
+    paddingHorizontal: spacing['3'],
+    paddingVertical:   spacing['2'],
+    marginBottom:      spacing['3'],
+    gap:               8,
+  },
+  localNoticeContent: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           8,
+    flex:          1,
+  },
+  localNoticeText: {
+    color:      colors.text.secondary,
+    fontSize:   12,
+    lineHeight: 16,
+    flex:       1,
   },
 });
 }
