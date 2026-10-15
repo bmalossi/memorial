@@ -17,7 +17,7 @@ import {
   stopNativeRecording,
   cancelNativeRecording,
 } from '../../lib/nativeAudioService';
-import { transcribeAudioUri, LocalSpeechRecognizer } from '../../lib/voiceTranscriptionService';
+import { transcribeAudioUri, LocalSpeechRecognizer, decideTranscriptionEngine } from '../../lib/voiceTranscriptionService';
 import { defaultOnDeviceSpeechRecognizer } from '../../lib/onDeviceSpeechService';
 
 interface BottomQuickCaptureBarProps {
@@ -162,10 +162,24 @@ export function BottomQuickCaptureBar({
       return;
     }
 
-    // Se o modo local já estiver ativo, usa ditado on-device em tempo real
-    if (isLocalModeNotice) {
+    const decision = await decideTranscriptionEngine();
+
+    // Se a cota foi renovada e temos conexão, volta sozinho ao modo premium
+    if (decision.engine === 'premium' && isLocalModeNotice) {
+      setIsLocalModeNotice(false);
+    }
+
+    const shouldRunLocal =
+      decision.engine === 'local' ||
+      (isLocalModeNotice && decision.engine !== 'premium');
+
+    // Se o modo local estiver indicado (cota esgotada, offline, ou ativo previamente)
+    if (shouldRunLocal) {
       const isAvail = await recognizer.isAvailable();
       if (isAvail) {
+        if (decision.reason === 'quota_exceeded' || decision.reason === 'offline') {
+          setIsLocalModeNotice(true);
+        }
         try {
           setIsLocalLiveDictation(true);
           setIsRecording(true);

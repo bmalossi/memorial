@@ -409,4 +409,236 @@ describe('Voice Transcription Service (Blindagem Cloudflare & Zero Client Secret
       resetTranscriptionDependencies();
     }
   });
+
+  it('sem conectividade (offline), decideTranscriptionEngine deve escolher imediatamente modo local sem chamar a rede', async () => {
+    const { decideTranscriptionEngine, setTranscriptionDependencies, resetTranscriptionDependencies } = await import('../src/lib/voiceTranscriptionService');
+
+    let fetchCalled = false;
+    setTranscriptionDependencies({
+      networkChecker: async () => false,
+      fetchFn: (async () => {
+        fetchCalled = true;
+        return new Response('ok');
+      }) as any,
+    });
+
+    try {
+      const decision = await decideTranscriptionEngine();
+      assert.strictEqual(decision.engine, 'local');
+      assert.strictEqual(decision.reason, 'offline');
+      assert.strictEqual(fetchCalled, false, 'Não deve tentar requisição de rede quando offline');
+    } finally {
+      resetTranscriptionDependencies();
+    }
+  });
+
+  it('sem conectividade (offline), transcribeAudioUri deve acionar o motor local sem chamar o servidor', async () => {
+    const { transcribeAudioUri, setTranscriptionDependencies, resetTranscriptionDependencies } = await import('../src/lib/voiceTranscriptionService');
+
+    let fetchCalled = false;
+    let localCalled = false;
+    let localStatusEmitted = false;
+
+    const mockRecognizer = {
+      isAvailable: async () => true,
+      start: async () => {},
+      stop: async () => '',
+      cancel: async () => {},
+      transcribeAudioFile: async () => {
+        localCalled = true;
+        return 'registro gravado offline no aparelho';
+      },
+    };
+
+    setTranscriptionDependencies({
+      networkChecker: async () => false,
+      localRecognizer: mockRecognizer,
+      fetchFn: (async () => {
+        fetchCalled = true;
+        return new Response('ok');
+      }) as any,
+    });
+
+    try {
+      const result = await transcribeAudioUri('https://cdn.bibliavive.com.br/sample.m4a', (p) => {
+        if (p.status === 'local') {
+          localStatusEmitted = true;
+        }
+      });
+
+      assert.strictEqual(result, 'registro gravado offline no aparelho');
+      assert.strictEqual(localCalled, true);
+      assert.strictEqual(localStatusEmitted, true);
+      assert.strictEqual(fetchCalled, false, 'Nenhum áudio ou requisição sai do aparelho offline');
+    } finally {
+      resetTranscriptionDependencies();
+    }
+  });
+
+  it('com cache de cota estourada válido, decideTranscriptionEngine deve retornar local em 0ms sem chamar fetch', async () => {
+    const { decideTranscriptionEngine, setQuotaCache, setTranscriptionDependencies, resetTranscriptionDependencies } = await import('../src/lib/voiceTranscriptionService');
+
+    let fetchCalled = false;
+    setQuotaCache('exceeded', { ttlMs: 60000 });
+
+    setTranscriptionDependencies({
+      networkChecker: async () => true,
+      fetchFn: (async () => {
+        fetchCalled = true;
+        return new Response('ok');
+      }) as any,
+    });
+
+    try {
+      const decision = await decideTranscriptionEngine();
+      assert.strictEqual(decision.engine, 'local');
+      assert.strictEqual(decision.reason, 'quota_exceeded');
+      assert.strictEqual(fetchCalled, false, 'Deve consultar do cache curto sem adicionar latência na abertura');
+    } finally {
+      resetTranscriptionDependencies();
+    }
+  });
+
+  it('com cache de cota disponível válido, decideTranscriptionEngine deve retornar premium em 0ms sem chamar fetch', async () => {
+    const { decideTranscriptionEngine, setQuotaCache, setTranscriptionDependencies, resetTranscriptionDependencies } = await import('../src/lib/voiceTranscriptionService');
+
+    let fetchCalled = false;
+    setQuotaCache('available', { ttlMs: 60000 });
+
+    setTranscriptionDependencies({
+      networkChecker: async () => true,
+      fetchFn: (async () => {
+        fetchCalled = true;
+        return new Response('ok');
+      }) as any,
+    });
+
+    try {
+      const decision = await decideTranscriptionEngine();
+      assert.strictEqual(decision.engine, 'premium');
+      assert.strictEqual(decision.reason, 'quota_available');
+      assert.strictEqual(fetchCalled, false, 'Cache disponível deve responder instantaneamente');
+    } finally {
+      resetTranscriptionDependencies();
+    }
+  });
+
+  it('quando o cache de cota estourada expirar por resetAt, o app consulta o backend e volta ao premium automaticamente', async () => {
+    const { decideTranscriptionEngine, setQuotaCache, setTranscriptionDependencies, resetTranscriptionDependencies } = await import('../src/lib/voiceTranscriptionService');
+
+    let quotaFetchCount = 0;
+    // Configura um cache que já expirou no passado
+    setQuotaCache('exceeded', { resetAt: Date.now() - 1000 });
+
+    setTranscriptionDependencies({
+      networkChecker: async () => true,
+      fetchFn: (async (url: string | URL | Request) => {
+        const urlStr = url.toString();
+        if (urlStr.includes('action=quota')) {
+          quotaFetchCount++;
+          return new Response(JSON.stringify({ available: true }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response('ok');
+      }) as any,
+    });
+
+    try {
+      const decision = await decideTranscriptionEngine();
+      assert.strictEqual(decision.engine, 'premium');
+      assert.strictEqual(decision.reason, 'quota_available');
+      assert.strictEqual(quotaFetchCount, 1, 'Deve re-verificar no backend e retornar ao modo premium');
+    } finally {
+      resetTranscriptionDependencies();
+    }
+  });
+
+  it('quando a consulta de cota no backend retornar 429 quota_exceeded, salva no cache e decide modo local', async () => {
+    const { decideTranscriptionEngine, getQuotaCache, setTranscriptionDependencies, resetTranscriptionDependencies } = await import('../src/lib/voiceTranscriptionService');
+
+    setTranscriptionDependencies({
+      networkChecker: async () => true,
+      fetchFn: (async (url: string | URL | Request) => {
+        const urlStr = url.toString();
+        if (urlStr.includes('action=quota')) {
+          return new Response(JSON.stringify({ error: 'Cota esgotada', code: 'quota_exceeded' }), {
+            status: 429,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response('ok');
+      }) as any,
+    });
+
+    try {
+      const decision = await decideTranscriptionEngine();
+      assert.strictEqual(decision.engine, 'local');
+      assert.strictEqual(decision.reason, 'quota_exceeded');
+
+      const cache = getQuotaCache();
+      assert.ok(cache !== null);
+      assert.strictEqual(cache?.status, 'exceeded');
+    } finally {
+      resetTranscriptionDependencies();
+    }
+  });
+
+  it('quando o estado de cota for desconhecido (404 ou 501), assume premium conforme a spec', async () => {
+    const { decideTranscriptionEngine, setTranscriptionDependencies, resetTranscriptionDependencies } = await import('../src/lib/voiceTranscriptionService');
+
+    setTranscriptionDependencies({
+      networkChecker: async () => true,
+      fetchFn: (async (url: string | URL | Request) => {
+        const urlStr = url.toString();
+        if (urlStr.includes('action=quota')) {
+          return new Response('Not implemented', { status: 501 });
+        }
+        return new Response('ok');
+      }) as any,
+    });
+
+    try {
+      const decision = await decideTranscriptionEngine();
+      assert.strictEqual(decision.engine, 'premium');
+      assert.strictEqual(decision.reason, 'unknown_assumed_premium');
+    } finally {
+      resetTranscriptionDependencies();
+    }
+  });
+
+  it('falhas transitórias 500/503 no fluxo premium NÃO devem salvar no cache como cota estourada', async () => {
+    const { transcribeAudioUri, getQuotaCache, setTranscriptionDependencies, resetTranscriptionDependencies } = await import('../src/lib/voiceTranscriptionService');
+
+    setTranscriptionDependencies({
+      networkChecker: async () => true,
+      fetchFn: (async (_url: string | URL | Request, init?: RequestInit) => {
+        if (init?.method === 'POST') {
+          return new Response(JSON.stringify({ error: 'Erro interno no gateway STT' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }) as any,
+    });
+
+    try {
+      await assert.rejects(
+        async () => {
+          await transcribeAudioUri('https://cdn.bibliavive.com.br/sample.m4a');
+        },
+        (err: any) => err.status === 500
+      );
+
+      const cache = getQuotaCache();
+      assert.ok(cache === null || cache.status !== 'exceeded', 'Falhas 5xx não devem poluir o cache de cota');
+    } finally {
+      resetTranscriptionDependencies();
+    }
+  });
 });

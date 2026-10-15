@@ -49,12 +49,12 @@ Work the **frontier**: any ticket whose blockers are all done. Os tickets 3, 4, 
 
 **Blocked by:** Ditado local on-device no Novo Registro
 
-- [ ] Estado de cota conhecido é guardado em cache curto, sem adicionar latência perceptível na abertura da captura.
-- [ ] Sem conectividade, a captura usa o modo local.
-- [ ] Ao renovar a cota, o app volta ao modo premium automaticamente.
-- [ ] Estado desconhecido assume premium e trata `quota_exceeded` com regravação em modo local.
-- [ ] Falhas de rede momentâneas no premium não forçam o modo local sem necessidade.
-- [ ] Testes cobrem cada gatilho e o retorno ao premium.
+- [x] Estado de cota conhecido é guardado em cache curto, sem adicionar latência perceptível na abertura da captura.
+- [x] Sem conectividade, a captura usa o modo local.
+- [x] Ao renovar a cota, o app volta ao modo premium automaticamente.
+- [x] Estado desconhecido assume premium e trata `quota_exceeded` com regravação em modo local.
+- [x] Falhas de rede momentâneas no premium não forçam o modo local sem necessidade.
+- [x] Testes cobrem cada gatilho e o retorno ao premium.
 
 ## Falhas acolhedoras do reconhecimento nativo
 

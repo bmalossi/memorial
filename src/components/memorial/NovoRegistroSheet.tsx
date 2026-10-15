@@ -23,7 +23,7 @@ import {
   stopNativeRecording,
   cancelNativeRecording,
 } from '../../lib/nativeAudioService';
-import { transcribeAudioUri } from '../../lib/voiceTranscriptionService';
+import { transcribeAudioUri, decideTranscriptionEngine } from '../../lib/voiceTranscriptionService';
 import { defaultOnDeviceSpeechRecognizer } from '../../lib/onDeviceSpeechService';
 
 import { useTheme, ColorTokens, typography, spacing, radius, getThemedShadows, components } from '../../theme';
@@ -252,10 +252,24 @@ export function NovoRegistroSheet({
       return;
     }
 
-    // Se o modo local já estiver ativo (ex: cota na nuvem esgotada), usa ditado on-device em tempo real
-    if (isLocalModeNotice) {
+    const decision = await decideTranscriptionEngine();
+
+    // Se a cota foi renovada e temos conexão, volta sozinho ao modo premium
+    if (decision.engine === 'premium' && isLocalModeNotice) {
+      setIsLocalModeNotice(false);
+    }
+
+    const shouldRunLocal =
+      decision.engine === 'local' ||
+      (isLocalModeNotice && decision.engine !== 'premium');
+
+    // Se o modo local estiver indicado (cota esgotada, offline, ou ativo previamente)
+    if (shouldRunLocal) {
       const isAvail = await defaultOnDeviceSpeechRecognizer.isAvailable();
       if (isAvail) {
+        if (decision.reason === 'quota_exceeded' || decision.reason === 'offline') {
+          setIsLocalModeNotice(true);
+        }
         try {
           setIsLocalLiveDictation(true);
           setIsRecording(true);

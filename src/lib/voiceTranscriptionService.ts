@@ -37,6 +37,27 @@ export interface TranscriptionProgress {
   message: string;
 }
 
+export type TranscriptionEngine = 'premium' | 'local';
+
+export type EngineDecisionReason =
+  | 'quota_available'
+  | 'quota_exceeded'
+  | 'offline'
+  | 'unknown_assumed_premium';
+
+export interface EngineDecision {
+  engine: TranscriptionEngine;
+  reason: EngineDecisionReason;
+  resetAt?: number;
+}
+
+export interface QuotaCacheEntry {
+  status: 'available' | 'exceeded';
+  cachedAt: number;
+  ttlMs: number;
+  resetAt?: number;
+}
+
 export interface LocalSpeechRecognizer {
   isAvailable(): Promise<boolean>;
   start(callbacks?: { onPartialResult?: (text: string) => void }): Promise<void>;
@@ -49,9 +70,50 @@ export interface TranscriptionServiceDependencies {
   fetchFn?: typeof fetch;
   localRecognizer?: LocalSpeechRecognizer;
   uploader?: (audioUri: string, uploadUrl: string) => Promise<boolean>;
+  networkChecker?: () => Promise<boolean>;
 }
 
 let activeDependencies: TranscriptionServiceDependencies = {};
+
+let quotaCache: QuotaCacheEntry | null = null;
+const DEFAULT_AVAILABLE_CACHE_TTL_MS = 60 * 1000; // 60s
+const DEFAULT_EXCEEDED_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
+export function getQuotaCache(): QuotaCacheEntry | null {
+  if (!quotaCache) return null;
+  const now = Date.now();
+  if (quotaCache.resetAt && now >= quotaCache.resetAt) {
+    quotaCache = null;
+    return null;
+  }
+  if (now - quotaCache.cachedAt > quotaCache.ttlMs) {
+    quotaCache = null;
+    return null;
+  }
+  return quotaCache;
+}
+
+export function setQuotaCache(
+  status: 'available' | 'exceeded',
+  options?: { ttlMs?: number; resetAt?: number }
+): void {
+  const now = Date.now();
+  const ttlMs =
+    options?.ttlMs ??
+    (status === 'available'
+      ? DEFAULT_AVAILABLE_CACHE_TTL_MS
+      : DEFAULT_EXCEEDED_CACHE_TTL_MS);
+  quotaCache = {
+    status,
+    cachedAt: now,
+    ttlMs,
+    resetAt: options?.resetAt,
+  };
+}
+
+export function clearQuotaCache(): void {
+  quotaCache = null;
+}
 
 export function setTranscriptionDependencies(deps: Partial<TranscriptionServiceDependencies>): void {
   activeDependencies = { ...activeDependencies, ...deps };
@@ -63,10 +125,93 @@ export function setLocalSpeechRecognizer(recognizer: LocalSpeechRecognizer): voi
 
 export function resetTranscriptionDependencies(): void {
   activeDependencies = {};
+  clearQuotaCache();
 }
 
 function getFetch(): typeof fetch {
   return activeDependencies.fetchFn || fetch;
+}
+
+export async function checkNetworkConnectivity(): Promise<boolean> {
+  if (activeDependencies.networkChecker) {
+    try {
+      return await activeDependencies.networkChecker();
+    } catch {
+      return false;
+    }
+  }
+  if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') {
+    return navigator.onLine;
+  }
+  return true;
+}
+
+/**
+ * Decide o motor de transcrição antes de gravar:
+ * 1. Sem conectividade: vai direto ao modo local ('offline').
+ * 2. Com cache conhecido de cota:
+ *    - Se 'exceeded': vai direto ao modo local ('quota_exceeded').
+ *    - Se 'available': usa modo premium ('quota_available') em 0ms.
+ * 3. Se desconhecido ou expirado: consulta leve com timeout curto (1500ms).
+ *    - Se cota estourada: guarda no cache e vai ao modo local.
+ *    - Se cota disponível: guarda no cache e vai ao modo premium.
+ *    - Se desconhecido (404/501/servidor sem rota de cota): assume premium.
+ */
+export async function decideTranscriptionEngine(): Promise<EngineDecision> {
+  const isOnline = await checkNetworkConnectivity();
+  if (!isOnline) {
+    return { engine: 'local', reason: 'offline' };
+  }
+
+  const cached = getQuotaCache();
+  if (cached) {
+    if (cached.status === 'exceeded') {
+      return { engine: 'local', reason: 'quota_exceeded', resetAt: cached.resetAt };
+    }
+    return { engine: 'premium', reason: 'quota_available' };
+  }
+
+  const fetchFn = getFetch();
+  try {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), 1500) : null;
+
+    let res: Response;
+    try {
+      res = await fetchFn(`${STT_API_URL}?action=quota`, {
+        signal: controller ? controller.signal : undefined,
+      });
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+
+    if (res.status === 429) {
+      const err = await parseResponseError(res, '');
+      if (err.isQuotaExceeded) {
+        setQuotaCache('exceeded');
+        return { engine: 'local', reason: 'quota_exceeded' };
+      }
+    }
+
+    if (res.ok) {
+      try {
+        const data = await res.json();
+        if (data && (data.code === CODE_QUOTA_EXCEEDED || data.available === false)) {
+          const resetAt = typeof data.resetAt === 'number' ? data.resetAt : undefined;
+          setQuotaCache('exceeded', { resetAt });
+          return { engine: 'local', reason: 'quota_exceeded', resetAt };
+        }
+        setQuotaCache('available');
+        return { engine: 'premium', reason: 'quota_available' };
+      } catch {
+        // Resposta não é JSON válido
+      }
+    }
+
+    return { engine: 'premium', reason: 'unknown_assumed_premium' };
+  } catch {
+    return { engine: 'premium', reason: 'unknown_assumed_premium' };
+  }
 }
 
 async function parseResponseError(res: Response, defaultMsg: string): Promise<TranscriptionError> {
@@ -105,6 +250,7 @@ async function handleQuotaExceededFallback(
   audioUri: string,
   onProgress?: (p: TranscriptionProgress) => void
 ): Promise<string> {
+  setQuotaCache('exceeded');
   const localRecognizer = activeDependencies.localRecognizer;
   if (!localRecognizer) {
     throw new TranscriptionError(
@@ -329,6 +475,16 @@ export async function transcribeAudioUri(
   onProgress?: (p: TranscriptionProgress) => void
 ): Promise<string> {
   try {
+    // 1. Verifica conectividade antes de qualquer requisição de rede
+    const isOnline = await checkNetworkConnectivity();
+    if (!isOnline) {
+      onProgress?.({
+        status: 'local',
+        message: 'Sem conexão com a internet. Transcrevendo no aparelho...',
+      });
+      return await handleQuotaExceededFallback(audioUri, onProgress);
+    }
+
     onProgress?.({
       status: 'uploading',
       message: 'Enviando áudio com fidelidade...',
@@ -455,6 +611,7 @@ export async function transcribeAudioUri(
 
       if (pollData.status === 'completed') {
         const finalText = (pollData.text || '').trim();
+        setQuotaCache('available');
         onProgress?.({
           status: 'completed',
           message: 'Transcrição concluída com sucesso.',
