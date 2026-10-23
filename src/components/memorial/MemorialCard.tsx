@@ -27,6 +27,9 @@ export function MemorialCard({ entry, onPress, onAnswer, onEdit }: Props) {
   const answerScale = useRef(new Animated.Value(1)).current;
   const [isMarking, setIsMarking] = useState(false);
 
+  // Entradas originadas do Caderno Bíblico da Bíblia Vive (somente leitura)
+  const isNotebookEntry = entry.id.startsWith('nb_');
+
   const s = useMemo(() => getCardStyles(colors, isDark), [colors, isDark]);
 
   const handlePressIn = () => {
@@ -64,7 +67,15 @@ export function MemorialCard({ entry, onPress, onAnswer, onEdit }: Props) {
       >
         {/* Topo: Categoria e Data com Ação de Edição */}
         <View style={s.header}>
-          <Text style={s.categoryLabel}>{cfg.tag}</Text>
+          <View style={s.categoryRow}>
+            <Text style={s.categoryLabel}>{cfg.tag}</Text>
+            {isNotebookEntry && (
+              <View style={[s.notebookBadge, { backgroundColor: colors.bg.raised, borderColor: colors.border.subtle }]}>
+                <Feather name="book" size={9} color={colors.text.muted} style={{ marginRight: 3 }} />
+                <Text style={[s.notebookBadgeText, { color: colors.text.muted }]}>Caderno</Text>
+              </View>
+            )}
+          </View>
           <View style={s.headerRight}>
             <Text style={s.dateText}>{relativeDate(entry.created_at)}</Text>
             {onEdit && (
@@ -168,6 +179,12 @@ function getCardStyles(colors: ColorTokens, isDark: boolean) {
       marginBottom:   2,
     },
 
+    categoryRow: {
+      flexDirection: 'row',
+      alignItems:    'center',
+      gap:           6,
+    },
+
     categoryLabel: {
       color:         colors.text.secondary,
       fontSize:      11,
@@ -188,6 +205,21 @@ function getCardStyles(colors: ColorTokens, isDark: boolean) {
 
     editBtn: {
       padding: 2,
+    },
+
+    notebookBadge: {
+      flexDirection:     'row',
+      alignItems:        'center',
+      paddingHorizontal: 6,
+      paddingVertical:   2,
+      borderRadius:      4,
+      borderWidth:       1,
+    },
+
+    notebookBadgeText: {
+      fontSize:   9,
+      fontWeight: typography.weight.semibold,
+      letterSpacing: 0.5,
     },
 
     bibleRef: {

@@ -24,10 +24,14 @@ import {
   SAVED_EMAIL_KEY,
   SAVED_PASSWORD_KEY,
 } from '../src/lib/authCredentialsStore';
+import { clearSecureStoreForTests } from '../src/lib/secureStorage';
 
 describe('Auth Credentials Store (Lembrar Credenciais na Tela de Login)', () => {
   beforeEach(async () => {
+    // Limpa AsyncStorage (e-mail, flag remember) e o store in-memory de
+    // secureStorage (senha) para isolar cada teste em ambiente Node.
     await AsyncStorage.clear();
+    clearSecureStoreForTests();
   });
 
   it('deve retornar credenciais vazias quando nada foi salvo previamente', async () => {
@@ -48,11 +52,14 @@ describe('Auth Credentials Store (Lembrar Credenciais na Tela de Login)', () => 
     // Valida armazenamento sob chaves canônicas
     const rememberVal = await AsyncStorage.getItem(REMEMBER_CREDENTIALS_KEY);
     const emailVal = await AsyncStorage.getItem(SAVED_EMAIL_KEY);
-    const passVal = await AsyncStorage.getItem(SAVED_PASSWORD_KEY);
 
     assert.strictEqual(rememberVal, 'true');
     assert.strictEqual(emailVal, 'usuario@bibliavive.com.br');
-    assert.strictEqual(passVal, 'minhasenha123');
+
+    // NOTA: a senha é armazenada em secureStorage (Keychain/Keystore em produção;
+    // Map in-memory em Node). Não é possível verificá-la via AsyncStorage.
+    // O comportamento de leitura já é validado por getSavedCredentials() acima (linha 46).
+    void SAVED_PASSWORD_KEY; // evita "declared but never read"
   });
 
   it('deve limpar credenciais quando o usuário desmarca a opção', async () => {

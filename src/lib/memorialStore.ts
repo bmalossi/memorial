@@ -4,13 +4,16 @@
  * Arquitetura Offline-First & Cloud Sync:
  * 1. Cache local persistente via AsyncStorage para carregamento imediato (0 latência).
  * 2. Sincronização bidirecional resiliente com a tabela `user_notes` compartilhada com o Bíblia Vive.
- * 3. Fila de pendências offline para envio automático assim que a conexão for reestabelecida.
- * 4. Notificação de estado em tempo real para indicadores visuais na UI.
+ * 3. Registros do Caderno do Capítulo (chapter_notebooks, escritos no site) também são
+ *    puxados e exibidos na Linha Sagrada — somente leitura no app (não são editados aqui).
+ * 4. Fila de pendências offline para envio automático assim que a conexão for reestabelecida.
+ * 5. Notificação de estado em tempo real para indicadores visuais na UI.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, MemorialCategory } from './supabase';
 import { MemorialEntry, BibleRef, AiConnection, JevCategory, PastoralIntent, SyncStatus, MOCK_ENTRIES } from './types';
+import { fetchChapterNotebooks } from './chapterNotebookAdapter';
 
 const STORAGE_KEY_ENTRIES = '@memorial_cache_entries_v2';
 const STORAGE_KEY_PENDING = '@memorial_pending_queue_v2';
@@ -378,6 +381,8 @@ async function runSyncMemorials(): Promise<{
       const remainingQueue: PendingAction[] = [];
 
       for (const item of queue) {
+        // Cadernos (ids 'nb_*') são somente-leitura — nunca enviados via PUSH
+        if (item.id.startsWith('nb_')) continue;
         try {
           if (item.action === 'create' && item.entry) {
             const payload = buildSupabaseNotePayload(user.id, item.entry);
@@ -503,6 +508,10 @@ async function runSyncMemorials(): Promise<{
 
     const cloudEntries: MemorialEntry[] = (cloudNotes || []).map(mapSupabaseRowToEntry);
 
+    // 3b. PULL dos Cadernos do Capítulo (escritos no site Bíblia Vive via botão flutuante).
+    // São somente-leitura no app: nunca entram na fila de pendências nem são enviados via PUSH.
+    const notebookEntries: MemorialEntry[] = await fetchChapterNotebooks(user.id);
+
     // 4. MERGE: Junta dados da nuvem com eventuais rascunhos locais ainda pendentes
     const updatedPendingQueue = await readPendingQueue();
     const pendingIds = new Set(updatedPendingQueue.map((p) => p.id));
@@ -513,7 +522,9 @@ async function runSyncMemorials(): Promise<{
       (e) => pendingIds.has(e.id) || e.sync_status === 'pending' || e.sync_status === 'local_only'
     );
 
+    // Monta mapa base com user_notes (têm prioridade em caso de ID igual, improvável mas defensivo)
     const mergedMap = new Map<string, MemorialEntry>();
+    notebookEntries.forEach((nb) => mergedMap.set(nb.id, nb));
     cloudEntries.forEach((c) => mergedMap.set(c.id, c));
     unsyncedLocals.forEach((l) => {
       if (!mergedMap.has(l.id)) {
@@ -535,10 +546,10 @@ async function runSyncMemorials(): Promise<{
       status: 'synced',
       lastSyncTime: nowIso,
       pendingCount: updatedPendingQueue.length,
-      cloudCount: cloudEntries.length,
+      cloudCount: cloudEntries.length + notebookEntries.length,
     });
 
-    return { entries: finalMerged, syncedCount: cloudEntries.length };
+    return { entries: finalMerged, syncedCount: cloudEntries.length + notebookEntries.length };
 
   } catch (err: any) {
     console.warn('[Memorial Sync] Falha durante sincronização com Supabase:', err?.message || err);
@@ -647,6 +658,7 @@ async function saveUserMemorialUnlocked(
 /**
  * Atualiza um marco de fé existente (Local-First com envio em segundo plano).
  * Permite editar título, relato, categoria, referências bíblicas e tags.
+ * Cadernos do Capítulo (id 'nb_*') são somente-leitura e não podem ser editados aqui.
  */
 export function updateUserMemorial(
   id: string,
@@ -659,6 +671,9 @@ async function updateUserMemorialUnlocked(
   id: string,
   updatedData: Partial<MemorialEntry>
 ): Promise<MemorialEntry> {
+  if (id.startsWith('nb_')) {
+    throw new Error('Registros do Caderno do Capítulo são somente-leitura no app.');
+  }
   const now = new Date().toISOString();
 
   // 1. Atualiza cache local imediatamente
@@ -776,8 +791,10 @@ export async function markPrayerAnsweredInSupabase(
 
 /**
  * Exclui um marco de fé (Local-First).
+ * Cadernos do Capítulo (id 'nb_*') são somente-leitura — a exclusão é ignorada.
  */
 export async function deleteUserMemorial(id: string): Promise<void> {
+  if (id.startsWith('nb_')) return; // somente-leitura
   // 1. Remove do cache local
   const cached = await readLocalCache();
   await writeLocalCache(cached.filter((e) => e.id !== id));

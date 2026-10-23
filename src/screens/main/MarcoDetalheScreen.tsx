@@ -633,6 +633,9 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
   const [currentEntry, setCurrentEntry] = useState<MemorialEntry>(
     route?.params?.entry ?? MOCK_ENTRY
   );
+
+  // Entradas do Caderno Bíblico (nb_*) são somente leitura — sem edição nem exclusão.
+  const isNotebookEntry = currentEntry.id.startsWith('nb_');
   const [isAnalyzingConnections, setIsAnalyzingConnections] = useState(false);
   const [visualShareVisible, setVisualShareVisible] = useState(false);
   const [visualShareData, setVisualShareData] = useState<VisualShareData | null>(null);
@@ -834,17 +837,22 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
   };
 
   const actionMenuItems: ActionSheetItem[] = [
-    {
-      id: 'edit',
-      label: 'Editar Marco de Fé',
-      description: 'Alterar relato, título, categoria ou referências bíblicas',
-      icon: 'edit-2',
-      variant: 'accent',
-      onPress: () => {
-        setActionMenuVisible(false);
-        setEditSheetVisible(true);
-      },
-    },
+    // Editar e Excluir são ocultados para entradas somente leitura do Caderno Bíblico
+    ...(!isNotebookEntry
+      ? [
+          {
+            id: 'edit',
+            label: 'Editar Marco de Fé',
+            description: 'Alterar relato, título, categoria ou referências bíblicas',
+            icon: 'edit-2',
+            variant: 'accent',
+            onPress: () => {
+              setActionMenuVisible(false);
+              setEditSheetVisible(true);
+            },
+          } as ActionSheetItem,
+        ]
+      : []),
     {
       id: 'connections',
       label: isAnalyzingConnections ? 'Mapeando Conexões…' : 'Mapear Conexões Bíblicas',
@@ -868,14 +876,18 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
       icon: 'share-2',
       onPress: handleShare,
     },
-    {
-      id: 'delete',
-      label: 'Excluir Marco de Fé',
-      description: 'Remover este registro permanentemente da Linha Sagrada',
-      icon: 'trash-2',
-      variant: 'destructive',
-      onPress: () => setDeleteConfirmVisible(true),
-    },
+    ...(!isNotebookEntry
+      ? [
+          {
+            id: 'delete',
+            label: 'Excluir Marco de Fé',
+            description: 'Remover este registro permanentemente da Linha Sagrada',
+            icon: 'trash-2',
+            variant: 'destructive',
+            onPress: () => setDeleteConfirmVisible(true),
+          } as ActionSheetItem,
+        ]
+      : []),
   ];
 
   const handleReadPassage = (connection: AiConnection) => {

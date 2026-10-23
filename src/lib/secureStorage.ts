@@ -16,6 +16,23 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const CHUNK_SIZE = 1800;
 const isNode = typeof process !== 'undefined' && !!process.versions?.node;
 
+/** Armazenamento in-memory usado exclusivamente em testes Node.js. */
+const _nodeStore = new Map<string, string>();
+const nodeStorage = {
+  getItem: async (key: string) => _nodeStore.get(key) ?? null,
+  setItem: async (key: string, value: string) => { _nodeStore.set(key, value); },
+  removeItem: async (key: string) => { _nodeStore.delete(key); },
+};
+
+/**
+ * Limpa o store in-memory de testes Node.
+ * Chamar no `beforeEach` de testes que usam secureStorage.
+ * NÃO tem efeito em produção (SecureStore real) nem em builds nativos.
+ */
+export function clearSecureStoreForTests(): void {
+  _nodeStore.clear();
+}
+
 let SecureStore: typeof import('expo-secure-store') | null = null;
 if (!isNode) {
   try {
@@ -26,13 +43,19 @@ if (!isNode) {
   }
 }
 
-export const isSecureStorageAvailable = SecureStore !== null;
+export const isSecureStorageAvailable = !isNode && SecureStore !== null;
 
 const countKey = (key: string) => `${key}.n`;
 const chunkKey = (key: string, i: number) => `${key}.${i}`;
 
+/** Retorna o storage de plataforma correto. */
+function platformStorage() {
+  if (isNode) return nodeStorage;
+  return AsyncStorage;
+}
+
 async function secureGet(key: string): Promise<string | null> {
-  if (!SecureStore) return AsyncStorage.getItem(key);
+  if (!SecureStore) return platformStorage().getItem(key);
   const countRaw = await SecureStore.getItemAsync(countKey(key));
   if (countRaw === null) return null;
   const count = parseInt(countRaw, 10);
@@ -47,7 +70,7 @@ async function secureGet(key: string): Promise<string | null> {
 }
 
 async function secureRemove(key: string): Promise<void> {
-  if (!SecureStore) return AsyncStorage.removeItem(key);
+  if (!SecureStore) return platformStorage().removeItem(key);
   const countRaw = await SecureStore.getItemAsync(countKey(key));
   const count = countRaw ? parseInt(countRaw, 10) || 0 : 0;
   for (let i = 0; i < count; i++) {
@@ -57,7 +80,7 @@ async function secureRemove(key: string): Promise<void> {
 }
 
 async function secureSet(key: string, value: string): Promise<void> {
-  if (!SecureStore) return AsyncStorage.setItem(key, value);
+  if (!SecureStore) return platformStorage().setItem(key, value);
   await secureRemove(key);
   const chunks = Math.max(1, Math.ceil(value.length / CHUNK_SIZE));
   for (let i = 0; i < chunks; i++) {
@@ -75,19 +98,19 @@ export const secureStorage = {
     if (value !== null || !SecureStore) return value;
 
     // Migracao: valor legado em texto puro no AsyncStorage
-    const legacy = await AsyncStorage.getItem(key);
+    const legacy = await platformStorage().getItem(key);
     if (legacy !== null) {
       await secureSet(key, legacy);
-      await AsyncStorage.removeItem(key);
+      await platformStorage().removeItem(key);
     }
     return legacy;
   },
   async setItem(key: string, value: string): Promise<void> {
     await secureSet(key, value);
-    if (SecureStore) await AsyncStorage.removeItem(key);
+    if (SecureStore) await platformStorage().removeItem(key);
   },
   async removeItem(key: string): Promise<void> {
     await secureRemove(key);
-    if (SecureStore) await AsyncStorage.removeItem(key);
+    if (SecureStore) await platformStorage().removeItem(key);
   },
 };

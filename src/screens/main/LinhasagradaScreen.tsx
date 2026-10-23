@@ -1558,20 +1558,25 @@ export function LinhasagradaScreen({ navigation }: Props) {
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={<ListHeader />}
-          renderItem={({ item: entry, index }) => (
-            <TimelineItem
-              entry={entry}
-              onPress={() => handleCardPress(entry)}
-              onEdit={() => handleEditEntry(entry)}
-              onAnswer={
-                entry.category === 'oracao' && !entry.is_answered
-                  ? () => handleMarkAnswered(entry.id)
-                  : undefined
-              }
-              isLast={index === filtered.length - 1}
-              isNew={entry.id === newlyCreatedId}
-            />
-          )}
+          renderItem={({ item: entry, index }) => {
+              // Entradas provenientes do Caderno Bíblico (nb_*) são somente leitura.
+              // Editar e marcar como respondida ficam desabilitados para evitar erros.
+              const isNotebook = entry.id.startsWith('nb_');
+              return (
+                <TimelineItem
+                  entry={entry}
+                  onPress={() => handleCardPress(entry)}
+                  onEdit={isNotebook ? undefined : () => handleEditEntry(entry)}
+                  onAnswer={
+                    !isNotebook && entry.category === 'oracao' && !entry.is_answered
+                      ? () => handleMarkAnswered(entry.id)
+                      : undefined
+                  }
+                  isLast={index === filtered.length - 1}
+                  isNew={entry.id === newlyCreatedId}
+                />
+              );
+            }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
