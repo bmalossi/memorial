@@ -24,7 +24,7 @@ import { defaultOnDeviceSpeechRecognizer, LocalSpeechError } from '../../lib/onD
 interface BottomQuickCaptureBarProps {
   value: string;
   onChangeText: (text: string) => void;
-  onSubmit: () => void;
+  onSubmit: (textOverride?: string) => Promise<void> | void;
   onOpenFullSheet: () => void;
   onError?: (title: string, message: string) => void;
   isSubmitting?: boolean;
@@ -124,10 +124,19 @@ export function BottomQuickCaptureBar({
 
           const finalText = await recognizer.stop();
           const base = baseContentBeforeLiveRef.current.trim();
-          if (finalText && finalText.trim()) {
-            onChangeText(base ? `${base}\n\n${finalText.trim()}` : finalText.trim());
-          }
+          const combined = finalText && finalText.trim()
+            ? (base ? `${base}\n\n${finalText.trim()}` : finalText.trim())
+            : '';
+
           setIsLocalModeNotice(true);
+
+          if (combined) {
+            onChangeText('');
+            setTranscribeMessage('Registrando memória...');
+            await onSubmit(combined);
+          } else if (base) {
+            onChangeText(base);
+          }
         } catch (err: any) {
           console.warn('[QuickCapture] Erro ao finalizar ditado local:', err);
           const title =
@@ -135,6 +144,9 @@ export function BottomQuickCaptureBar({
               ? 'Nenhuma Fala Detectada'
               : 'Reconhecimento de Voz';
           onError?.(title, err.message || 'Não foi possível processar a fala gravada.');
+          if (baseContentBeforeLiveRef.current) {
+            onChangeText(baseContentBeforeLiveRef.current);
+          }
         } finally {
           setIsTranscribing(false);
           setTranscribeMessage('');
@@ -162,7 +174,9 @@ export function BottomQuickCaptureBar({
           const updated = value.trim()
             ? `${value.trim()}\n\n${transcript.trim()}`
             : transcript.trim();
-          onChangeText(updated);
+          onChangeText('');
+          setTranscribeMessage('Registrando memória...');
+          await onSubmit(updated);
         }
       } catch (err: any) {
         console.warn('[QuickCapture] Erro ao transcrever:', err);
@@ -442,7 +456,7 @@ export function BottomQuickCaptureBar({
 
           {/* Botão de Envio Circular — Fiel à imagem de referência */}
           <TouchableOpacity
-            onPress={onSubmit}
+            onPress={() => onSubmit()}
             disabled={!canSubmit}
             style={[
               styles.circleBtn,

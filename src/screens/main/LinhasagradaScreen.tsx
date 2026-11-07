@@ -1113,8 +1113,8 @@ export function LinhasagradaScreen({ navigation }: Props) {
     }
   };
 
-  const handleQuickRegister = async () => {
-    const trimmed = quickText.trim();
+  const handleQuickRegister = async (textOverride?: string) => {
+    const trimmed = (typeof textOverride === 'string' ? textOverride : quickText).trim();
     if (!trimmed || isQuickSubmitting) return;
 
     setIsQuickSubmitting(true);
@@ -1137,6 +1137,8 @@ export function LinhasagradaScreen({ navigation }: Props) {
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     } catch (err) {
       console.warn('[Linhasagrada] Erro ao registrar rapidamente:', err);
+      // Restaura o rascunho em caso de falha de persistência para evitar perda de dados
+      setQuickText(trimmed);
     } finally {
       setIsQuickSubmitting(false);
     }
