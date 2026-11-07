@@ -95,10 +95,23 @@ export function isNativeAudioAvailable(): boolean {
 
 /**
  * Solicita permissão de gravação de áudio do microfone.
+ * Verifica primeiro getRecordingPermissionsAsync() para evitar abrir a Activity
+ * de permissão do Android (que causa onHostPause / AppState 'background') quando já autorizado.
  */
 export async function requestMicrophonePermission(): Promise<boolean> {
   try {
-    const { requestRecordingPermissionsAsync } = require('expo-audio');
+    const {
+      getRecordingPermissionsAsync,
+      requestRecordingPermissionsAsync,
+    } = require('expo-audio');
+    if (typeof getRecordingPermissionsAsync === 'function') {
+      try {
+        const current = await getRecordingPermissionsAsync();
+        if (current?.granted) {
+          return true;
+        }
+      } catch {}
+    }
     const { granted } = await requestRecordingPermissionsAsync();
     return !!granted;
   } catch {
@@ -116,14 +129,41 @@ export async function startNativeRecording(
     throw new Error('DEV_BUILD_REQUIRED');
   }
 
+  // Limpa qualquer sessão residual anterior para nunca travar o MediaRecorder do Android
+  if (recordingTimer) {
+    clearInterval(recordingTimer);
+    recordingTimer = null;
+  }
+  if (activeRecorder) {
+    const staleRecorder = activeRecorder;
+    activeRecorder = null;
+    try {
+      await staleRecorder.stop();
+    } catch {}
+  }
+
   const {
     AudioModule,
     setAudioModeAsync,
+    getRecordingPermissionsAsync,
     requestRecordingPermissionsAsync,
   } = require('expo-audio');
 
-  const { granted } = await requestRecordingPermissionsAsync();
-  if (!granted) {
+  // Checa permissão existente de forma síncrona/direta sem disparar Activity do sistema Android
+  let hasPermission = false;
+  if (typeof getRecordingPermissionsAsync === 'function') {
+    try {
+      const currentPerm = await getRecordingPermissionsAsync();
+      hasPermission = !!currentPerm?.granted;
+    } catch {}
+  }
+
+  if (!hasPermission) {
+    const { granted } = await requestRecordingPermissionsAsync();
+    hasPermission = !!granted;
+  }
+
+  if (!hasPermission) {
     throw new Error('PERMISSION_DENIED');
   }
 

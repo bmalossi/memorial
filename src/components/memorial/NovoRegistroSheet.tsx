@@ -164,14 +164,26 @@ export function NovoRegistroSheet({
   const isRecordingRef = useRef(false);
   isRecordingRef.current = isRecording;
 
-  // Interrupções do sistema (ligação, app em segundo plano) encerram a gravação sem travar o app
+  // Interrupções reais e prolongadas do sistema (app minimizado por vários segundos) encerram a gravação
   useEffect(() => {
+    let bgCancelTimer: any = null;
     const sub = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'active' && isRecordingRef.current) {
-        cancelVoiceRecording();
+      if (nextState === 'background' && isRecordingRef.current) {
+        if (bgCancelTimer) clearTimeout(bgCancelTimer);
+        bgCancelTimer = setTimeout(() => {
+          if (AppState.currentState === 'background' && isRecordingRef.current) {
+            cancelVoiceRecording();
+          }
+        }, 5000);
+      } else if (nextState === 'active' && bgCancelTimer) {
+        clearTimeout(bgCancelTimer);
+        bgCancelTimer = null;
       }
     });
-    return () => sub.remove();
+    return () => {
+      if (bgCancelTimer) clearTimeout(bgCancelTimer);
+      sub.remove();
+    };
   }, []);
 
   // Animação de subida do sheet
@@ -243,7 +255,9 @@ export function NovoRegistroSheet({
           useNativeDriver: true,
         }),
       ]).start();
-      cancelVoiceRecording();
+      if (isRecordingRef.current) {
+        cancelVoiceRecording();
+      }
     }
   }, [visible, initialCategory, initialBibleRef, initialVerseText, initialTitle, initialContent]);
 
@@ -270,34 +284,27 @@ export function NovoRegistroSheet({
       return;
     }
 
-    const decision = await decideTranscriptionEngine();
+    const isAvail = await defaultOnDeviceSpeechRecognizer.isAvailable();
+    if (isAvail) {
+      const decision = await decideTranscriptionEngine();
 
-    // Se a cota foi renovada e temos conexão, volta sozinho ao modo premium
-    if (decision.engine === 'premium' && isLocalModeNotice) {
-      setIsLocalModeNotice(false);
-    }
+      // Se a cota foi renovada e temos conexão, volta sozinho ao modo premium
+      if (decision.engine === 'premium' && isLocalModeNotice) {
+        setIsLocalModeNotice(false);
+      }
 
-    const shouldRunLocal =
-      decision.engine === 'local' ||
-      (isLocalModeNotice && decision.engine !== 'premium');
+      const shouldRunLocal =
+        decision.engine === 'local' ||
+        (isLocalModeNotice && decision.engine !== 'premium');
 
-    // Se o modo local estiver indicado (cota esgotada, offline, ou ativo previamente)
-    if (shouldRunLocal) {
-      const isAvail = await defaultOnDeviceSpeechRecognizer.isAvailable();
-      if (isAvail) {
+      // Se o modo local estiver indicado (cota esgotada, offline, ou ativo previamente)
+      if (shouldRunLocal) {
         if (decision.reason === 'quota_exceeded' || decision.reason === 'offline') {
           setIsLocalModeNotice(true);
         }
         try {
-          setIsLocalLiveDictation(true);
-          setIsRecording(true);
           setRecordingSeconds(0);
           baseContentBeforeLiveRef.current = content;
-
-          if (recordingTimer.current) clearInterval(recordingTimer.current);
-          recordingTimer.current = setInterval(() => {
-            setRecordingSeconds((prev) => prev + 1);
-          }, 1000);
 
           await defaultOnDeviceSpeechRecognizer.start({
             onPartialResult: (partialText) => {
@@ -307,9 +314,19 @@ export function NovoRegistroSheet({
               }
             },
           });
+
+          isRecordingRef.current = true;
+          setIsLocalLiveDictation(true);
+          setIsRecording(true);
+
+          if (recordingTimer.current) clearInterval(recordingTimer.current);
+          recordingTimer.current = setInterval(() => {
+            setRecordingSeconds((prev) => prev + 1);
+          }, 1000);
           return;
         } catch (liveErr: any) {
           if (recordingTimer.current) clearInterval(recordingTimer.current);
+          isRecordingRef.current = false;
           setIsLocalLiveDictation(false);
           setIsRecording(false);
           const isPermissionOrPackage =
@@ -343,11 +360,13 @@ export function NovoRegistroSheet({
 
     try {
       setRecordingSeconds(0);
-      setIsRecording(true);
       await startNativeRecording((secs) => {
         setRecordingSeconds(secs);
       });
+      isRecordingRef.current = true;
+      setIsRecording(true);
     } catch (err: any) {
+      isRecordingRef.current = false;
       setIsRecording(false);
       if (err.message === 'PERMISSION_DENIED') {
         setAudioDialog({
@@ -454,6 +473,9 @@ export function NovoRegistroSheet({
   };
 
   const cancelVoiceRecording = async () => {
+    if (!isRecordingRef.current) return;
+    isRecordingRef.current = false;
+
     if (isLocalLiveDictation) {
       try {
         if (recordingTimer.current) clearInterval(recordingTimer.current);

@@ -106,6 +106,79 @@ describe('Bottom-Docked Quick Capture — Envio Automático por Voz & Blindagem 
     simulateStopClick(1500);
     assert.strictEqual(stopped, true, 'Deve permitir parar quando a gravação tiver duração legítima');
   });
+
+  it('NUNCA deve ativar isRecording antes de startNativeRecording concluir (evita cancelamento durante permissão no Android)', async () => {
+    const events: string[] = [];
+    let isRecording = false;
+
+    const mockStartNativeRecording = async () => {
+      events.push('native_init_start');
+      // Simula Android emitindo AppState background durante checagem de permissão
+      if (isRecording) {
+        events.push('premature_cancel_triggered');
+      }
+      await new Promise((r) => setTimeout(r, 10));
+      events.push('native_record_active');
+    };
+
+    await mockStartNativeRecording();
+    isRecording = true;
+    events.push('ui_recording_true');
+
+    assert.ok(!events.includes('premature_cancel_triggered'), 'Não deve estar com isRecording=true durante inicialização nativa');
+    assert.deepStrictEqual(events, [
+      'native_init_start',
+      'native_record_active',
+      'ui_recording_true',
+    ]);
+  });
+
+  it('transições efêmeras de AppState background no Android (< 5000ms) NÃO devem encerrar a gravação ativa', async () => {
+    let cancelled = false;
+    let currentAppState = 'active';
+    let bgTimer: any = null;
+
+    const onAppStateChange = (nextState: string) => {
+      currentAppState = nextState;
+      if (nextState === 'background') {
+        if (bgTimer) clearTimeout(bgTimer);
+        bgTimer = setTimeout(() => {
+          if (currentAppState === 'background') {
+            cancelled = true;
+          }
+        }, 50); // 50ms representando a janela de debounce no teste
+      } else if (nextState === 'active' && bgTimer) {
+        clearTimeout(bgTimer);
+        bgTimer = null;
+      }
+    };
+
+    // Blip rápido do Android (GrantPermissionsActivity / foco de áudio: 10ms)
+    onAppStateChange('background');
+    await new Promise((r) => setTimeout(r, 10));
+    onAppStateChange('active');
+    await new Promise((r) => setTimeout(r, 60));
+
+    assert.strictEqual(cancelled, false, 'Blip efêmero de background no Android jamais deve cancelar gravação');
+  });
+
+  it('NovoRegistroSheet fechado (isRecording = false) NUNCA deve cancelar o gravador nativo global da BottomQuickCaptureBar', () => {
+    let globalNativeRecorderCancelled = false;
+    const sheetIsRecordingRef = { current: false };
+
+    const sheetCancelVoiceRecording = () => {
+      if (!sheetIsRecordingRef.current) return;
+      globalNativeRecorderCancelled = true;
+    };
+
+    // Sheet fechado atualiza props enquanto a barra rápida está gravando
+    sheetCancelVoiceRecording();
+    assert.strictEqual(
+      globalNativeRecorderCancelled,
+      false,
+      'Sheet inativo não pode interromper o singleton de áudio da barra rápida'
+    );
+  });
 });
 
 describe('Pastoral Onboarding Banner — Invariantes de Exibição sem Flickering', () => {

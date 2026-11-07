@@ -102,16 +102,31 @@ export function BottomQuickCaptureBar({
     };
   }, [recognizer]);
 
-  // Interrupções do sistema (ligação, app em segundo plano) encerram a gravação sem travar o app
+  // Interrupções reais e prolongadas do sistema (app minimizado por vários segundos) encerram a gravação.
+  // Ignora transições efêmeras do Android (ex: GrantPermissionsActivity / diálogos rápidos que emitem 'background' por ~50ms).
   useEffect(() => {
+    let bgCancelTimer: any = null;
     const sub = AppState.addEventListener('change', (nextState) => {
-      // Encerra apenas quando o aplicativo for de fato enviado para background (ex: chamada telefônica ou minimizar app)
-      // Não encerra em transições efêmeras como 'inactive' (diálogos de permissão ou chaveamento de foco de áudio)
-      if (nextState === 'background' && isRecordingRef.current) {
-        handleCancelVoice();
+      if (nextState === 'background' && isRecordingRef.current && !isTogglingVoiceRef.current) {
+        if (bgCancelTimer) clearTimeout(bgCancelTimer);
+        bgCancelTimer = setTimeout(() => {
+          if (
+            AppState.currentState === 'background' &&
+            isRecordingRef.current &&
+            !isTogglingVoiceRef.current
+          ) {
+            handleCancelVoice();
+          }
+        }, 5000);
+      } else if (nextState === 'active' && bgCancelTimer) {
+        clearTimeout(bgCancelTimer);
+        bgCancelTimer = null;
       }
     });
-    return () => sub.remove();
+    return () => {
+      if (bgCancelTimer) clearTimeout(bgCancelTimer);
+      sub.remove();
+    };
   }, []);
 
   const handleToggleVoice = async () => {
@@ -119,13 +134,13 @@ export function BottomQuickCaptureBar({
     isTogglingVoiceRef.current = true;
 
     try {
-      if (isRecording) {
+      if (isRecordingRef.current) {
         // Trava defensiva contra duplo clique involuntário: exige pelo menos 700ms de gravação para parar
         if (Date.now() - recordingStartTimeRef.current < 700) {
           return;
         }
 
-        if (isLocalLiveDictation) {
+        if (isLocalLiveDictationRef.current) {
           try {
             if (recordingTimer.current) clearInterval(recordingTimer.current);
             setIsRecording(false);
@@ -201,35 +216,28 @@ export function BottomQuickCaptureBar({
         return;
       }
 
-      const decision = await decideTranscriptionEngine();
+      // Verifica primeiro e instantaneamente (0ms) se o módulo de ditado on-device existe no binário
+      const isAvail = await recognizer.isAvailable();
+      if (isAvail) {
+        const decision = await decideTranscriptionEngine();
 
-      // Se a cota foi renovada e temos conexão, volta sozinho ao modo premium
-      if (decision.engine === 'premium' && isLocalModeNotice) {
-        setIsLocalModeNotice(false);
-      }
+        // Se a cota foi renovada e temos conexão, volta sozinho ao modo premium
+        if (decision.engine === 'premium' && isLocalModeNotice) {
+          setIsLocalModeNotice(false);
+        }
 
-      const shouldRunLocal =
-        decision.engine === 'local' ||
-        (isLocalModeNotice && decision.engine !== 'premium');
+        const shouldRunLocal =
+          decision.engine === 'local' ||
+          (isLocalModeNotice && decision.engine !== 'premium');
 
-      // Se o modo local estiver indicado (cota esgotada, offline, ou ativo previamente)
-      if (shouldRunLocal) {
-        const isAvail = await recognizer.isAvailable();
-        if (isAvail) {
+        // Se o modo local estiver indicado (cota esgotada, offline, ou ativo previamente)
+        if (shouldRunLocal) {
           if (decision.reason === 'quota_exceeded' || decision.reason === 'offline') {
             setIsLocalModeNotice(true);
           }
           try {
-            recordingStartTimeRef.current = Date.now();
-            setIsLocalLiveDictation(true);
-            setIsRecording(true);
             setRecordingSeconds(0);
             baseContentBeforeLiveRef.current = value;
-
-            if (recordingTimer.current) clearInterval(recordingTimer.current);
-            recordingTimer.current = setInterval(() => {
-              setRecordingSeconds((prev) => prev + 1);
-            }, 1000);
 
             await recognizer.start({
               onPartialResult: (partialText) => {
@@ -239,9 +247,22 @@ export function BottomQuickCaptureBar({
                 }
               },
             });
+
+            recordingStartTimeRef.current = Date.now();
+            isLocalLiveDictationRef.current = true;
+            isRecordingRef.current = true;
+            setIsLocalLiveDictation(true);
+            setIsRecording(true);
+
+            if (recordingTimer.current) clearInterval(recordingTimer.current);
+            recordingTimer.current = setInterval(() => {
+              setRecordingSeconds((prev) => prev + 1);
+            }, 1000);
             return;
           } catch (liveErr: any) {
             if (recordingTimer.current) clearInterval(recordingTimer.current);
+            isLocalLiveDictationRef.current = false;
+            isRecordingRef.current = false;
             setIsLocalLiveDictation(false);
             setIsRecording(false);
             const title =
@@ -268,13 +289,16 @@ export function BottomQuickCaptureBar({
       }
 
       try {
-        recordingStartTimeRef.current = Date.now();
         setRecordingSeconds(0);
-        setIsRecording(true);
         await startNativeRecording((secs) => {
           setRecordingSeconds(secs);
         });
+        recordingStartTimeRef.current = Date.now();
+        isRecordingRef.current = true;
+        setIsRecording(true);
       } catch (err: any) {
+        isRecordingRef.current = false;
+        isLocalLiveDictationRef.current = false;
         setIsRecording(false);
         setIsLocalLiveDictation(false);
         setRecordingSeconds(0);
@@ -297,12 +321,14 @@ export function BottomQuickCaptureBar({
   };
 
   const handleCancelVoice = async () => {
-    if (isLocalLiveDictation) {
+    if (isLocalLiveDictationRef.current) {
       try {
         if (recordingTimer.current) clearInterval(recordingTimer.current);
         await recognizer.cancel();
       } catch {}
       onChangeText(baseContentBeforeLiveRef.current);
+      isRecordingRef.current = false;
+      isLocalLiveDictationRef.current = false;
       setIsRecording(false);
       setIsLocalLiveDictation(false);
       setRecordingSeconds(0);
@@ -312,6 +338,7 @@ export function BottomQuickCaptureBar({
     try {
       await cancelNativeRecording();
     } catch {}
+    isRecordingRef.current = false;
     setIsRecording(false);
     setRecordingSeconds(0);
   };
