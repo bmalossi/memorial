@@ -33,8 +33,8 @@ import { classifyPastoralIntentLocally } from '../../lib/classifierJEV';
 import { fetchCurrentPastoralContact } from '../../lib/atalaiaStore';
 import { PastoralContact } from '../../lib/atalaiaTypes';
 
-// ─── Chip de referência bíblica ───────────────────────────────────────────────
-function BibleRefChip({ display, onPress }: { display: string; onPress: () => void }) {
+// ─── Referência Bíblica Editorial (Substitui o pill/card genérico) ────────────
+function BibleRefAnchor({ display, onPress }: { display: string; onPress: () => void }) {
   const { colors } = useTheme();
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -43,51 +43,66 @@ function BibleRefChip({ display, onPress }: { display: string; onPress: () => vo
       <TouchableOpacity
         onPress={onPress}
         onPressIn={() =>
-          Animated.spring(scale, { toValue: 0.94, useNativeDriver: true, tension: 400, friction: 10 }).start()
+          Animated.spring(scale, { toValue: 0.98, useNativeDriver: true, tension: 400, friction: 10 }).start()
         }
         onPressOut={() =>
           Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 350, friction: 10 }).start()
         }
-        activeOpacity={0.8}
+        activeOpacity={0.75}
         style={[
-          chip.wrap,
+          bibleRef.container,
           {
-            backgroundColor: colors.amber.muted,
-            borderColor: `${colors.amber.DEFAULT}35`,
+            borderLeftColor: colors.amber.DEFAULT,
           },
         ]}
         accessibilityRole="link"
-        accessibilityLabel={`Ler ${display}`}
+        accessibilityLabel={`Ler passagem bíblica ${display}`}
       >
-        <Feather name="book-open" size={12} color={colors.amber.DEFAULT} />
-        <Text style={[chip.text, { color: colors.amber.DEFAULT }]}>{display}</Text>
+        <View style={bibleRef.content}>
+          <View style={bibleRef.refRow}>
+            <Feather name="book-open" size={13} color={colors.amber.DEFAULT} />
+            <Text style={[bibleRef.refText, { color: colors.amber.DEFAULT }]}>{display}</Text>
+            <Feather name="arrow-up-right" size={13} color={colors.amber.DEFAULT} />
+          </View>
+          <Text style={[bibleRef.hintText, { color: colors.text.muted }]}>
+            Toque para abrir a passagem na Bíblia
+          </Text>
+        </View>
       </TouchableOpacity>
     </Animated.View>
   );
 }
 
-const chip = StyleSheet.create({
-  wrap: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    gap:               6,
-    alignSelf:         'flex-start',
-    backgroundColor:   colors.amber.muted,
-    borderRadius:      radius.full,
-    paddingHorizontal: 12,
-    paddingVertical:   6,
-    borderWidth:       1,
-    borderColor:       `${colors.amber.DEFAULT}30`,
+const bibleRef = StyleSheet.create({
+  container: {
+    borderLeftWidth: 2,
+    paddingLeft:     12,
+    paddingVertical: 2,
+    alignSelf:       'flex-start',
+    marginTop:       2,
+    marginBottom:    4,
   },
-  text: {
-    color:      colors.amber.DEFAULT,
-    fontSize:   typography.size.sm,
-    fontWeight: typography.weight.semibold,
+  content: {
+    gap: 3,
+  },
+  refRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           7,
+  },
+  refText: {
+    fontSize:      16,
+    fontWeight:    typography.weight.semibold,
+    fontFamily:    Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    letterSpacing: 0.2,
+  },
+  hintText: {
+    fontSize:      11.5,
     letterSpacing: 0.1,
   },
 });
 
-// ─── Card de Conexão Bíblica ──────────────────────────────────────────────────
+// ─── Card de Conexão Bíblica (Design Editorial Reverente) ──────────────────────
 function ConnectionCard({
   connection,
   onReadPassage,
@@ -99,7 +114,6 @@ function ConnectionCard({
 }) {
   const { colors, isDark } = useTheme();
   const scale = useRef(new Animated.Value(1)).current;
-  const jevCfg = connection.jev_category ? JEV_CONFIG[connection.jev_category] : null;
 
   return (
     <Animated.View style={[conn.wrapper, { transform: [{ scale }] }]}>
@@ -110,44 +124,40 @@ function ConnectionCard({
         onPressOut={() =>
           Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 350, friction: 12 }).start()
         }
-        style={[conn.card, { backgroundColor: colors.bg.surface, borderColor: colors.border.DEFAULT }]}
+        style={[
+          conn.card,
+          {
+            backgroundColor: colors.bg.surface,
+            borderColor: colors.border.subtle,
+          },
+        ]}
         accessibilityRole="none"
         accessibilityLabel={`Conexão bíblica: ${connection.reference}`}
       >
-        {/* Cabeçalho do Card: Tag da Categoria JEV & Confiança */}
+        {/* Topo do Card: Referência Bíblica como Título Sagrado */}
         <View style={conn.headerRow}>
-          {jevCfg ? (
-            <View style={conn.jevBadge}>
-              <Feather name={jevCfg.icon as any} size={11} color={colors.amber.DEFAULT} />
-              <Text style={conn.jevTagText}>{jevCfg.tag}</Text>
-            </View>
-          ) : (
-            <View style={conn.jevBadge}>
-              <Feather name="compass" size={11} color={colors.amber.DEFAULT} />
-              <Text style={conn.jevTagText}>CONEXÃO</Text>
-            </View>
-          )}
-
-          {typeof connection.confidence === 'number' && (
-            <Text style={[conn.confidenceText, { color: colors.text.muted }]}>
-              {Math.round(connection.confidence * 100)}% ressonância
+          <View style={conn.refRow}>
+            <View style={[conn.refDot, { backgroundColor: colors.amber.DEFAULT }]} />
+            <Text style={[conn.reference, { color: colors.amber.DEFAULT }]}>
+              {connection.reference}
             </Text>
-          )}
+          </View>
         </View>
 
-        {/* Referência Bíblica */}
-        <Text style={[conn.reference, { color: colors.amber.DEFAULT }]}>{connection.reference}</Text>
+        {/* Texto do Versículo Inspirado */}
+        <Text style={[conn.verseText, { color: isDark ? '#F5EFE6' : colors.text.primary }]}>
+          "{connection.verse_text}"
+        </Text>
 
-        {/* Divisor */}
+        {/* Divisor Editorial */}
         <View style={[conn.divider, { backgroundColor: colors.border.subtle }]} />
 
-        {/* Texto do Versículo */}
-        <Text style={[conn.verseText, { color: isDark ? '#E8E3EE' : colors.text.primary }]}>"{connection.verse_text}"</Text>
+        {/* Reflexão / Conexão Teológica */}
+        <Text style={[conn.explanation, { color: colors.text.secondary }]}>
+          {connection.explanation}
+        </Text>
 
-        {/* Explicação Teológica */}
-        <Text style={[conn.explanation, { color: colors.text.secondary }]}>{connection.explanation}</Text>
-
-        {/* Ações: Ler passagem no Leitor & Compartilhar Card Visual */}
+        {/* Ações: Ler no Leitor & Compartilhar Card Visual */}
         <View style={conn.actionsRow}>
           <TouchableOpacity
             onPress={() => onReadPassage(connection)}
@@ -155,7 +165,9 @@ function ConnectionCard({
             activeOpacity={0.7}
             accessibilityRole="link"
           >
-            <Text style={[conn.readLinkText, { color: colors.amber.DEFAULT }]}>Ler no contexto bíblico</Text>
+            <Text style={[conn.readLinkText, { color: colors.amber.DEFAULT }]}>
+              Ler no contexto bíblico
+            </Text>
             <Feather name="arrow-right" size={13} color={colors.amber.DEFAULT} />
           </TouchableOpacity>
 
@@ -174,7 +186,9 @@ function ConnectionCard({
               accessibilityLabel={`Compartilhar conexão ${connection.reference}`}
             >
               <Feather name="share-2" size={12} color={colors.text.secondary} />
-              <Text style={[conn.shareConnText, { color: colors.text.secondary }]}>Card Visual</Text>
+              <Text style={[conn.shareConnText, { color: colors.text.secondary }]}>
+                Card Visual
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -188,94 +202,72 @@ const conn = StyleSheet.create({
 
   card: {
     backgroundColor: colors.bg.surface,
-    borderRadius:    radius.lg,
+    borderRadius:    radius.md,
     borderWidth:     1,
-    borderColor:     colors.border.DEFAULT,
+    borderColor:     colors.border.subtle,
     padding:         spacing['5'],
     gap:             spacing['3'],
-    shadowColor:     '#000',
-    shadowOffset:    { width: 0, height: 2 },
-    shadowOpacity:   0.22,
-    shadowRadius:    6,
-    elevation:       2,
   },
 
   headerRow: {
     flexDirection:   'row',
     alignItems:      'center',
-    justifyContent: 'space-between',
-    marginBottom:    -2,
+    justifyContent:  'space-between',
   },
 
-  jevBadge: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    gap:               5,
-    backgroundColor:   `${colors.amber.DEFAULT}18`,
-    paddingHorizontal: 8,
-    paddingVertical:   3,
-    borderRadius:      radius.xs,
-    borderWidth:       1,
-    borderColor:       `${colors.amber.DEFAULT}35`,
+  refRow: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             8,
   },
 
-  jevTagText: {
-    color:         colors.amber.DEFAULT,
-    fontSize:      10,
-    fontWeight:    typography.weight.bold,
-    letterSpacing: 0.8,
-  },
-
-  confidenceText: {
-    color:      colors.text.muted,
-    fontSize:   11,
-    fontStyle:  'italic',
+  refDot: {
+    width:           6,
+    height:          6,
+    borderRadius:    radius.full,
   },
 
   reference: {
-    color:         colors.amber.DEFAULT,
-    fontSize:      typography.size.base,
-    fontWeight:    typography.weight.semibold,
-    letterSpacing: 0.1,
+    fontSize:        17,
+    fontWeight:      typography.weight.bold,
+    fontFamily:      Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    letterSpacing:   0.2,
   },
 
   divider: {
     height:          StyleSheet.hairlineWidth,
     backgroundColor: colors.border.subtle,
-    marginVertical:  -2,
   },
 
   verseText: {
-    color:       '#E8E3EE',
-    fontSize:    typography.size.sm,
-    lineHeight:  typography.size.sm * 1.65,
-    fontStyle:   'italic',
-    fontFamily:  Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    fontSize:        typography.size.base,
+    lineHeight:      typography.size.base * 1.6,
+    fontStyle:       'italic',
+    fontFamily:      Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
 
   explanation: {
-    color:      colors.text.secondary,
-    fontSize:   13,
-    lineHeight: 13 * 1.6,
+    fontSize:        13.5,
+    lineHeight:      13.5 * 1.6,
+    letterSpacing:   0.1,
   },
 
   actionsRow: {
     flexDirection:   'row',
     alignItems:      'center',
-    justifyContent: 'space-between',
+    justifyContent:  'space-between',
     paddingTop:      spacing['1'],
   },
 
   readLink: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    gap:            5,
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             5,
   },
 
   readLinkText: {
-    color:      colors.amber.DEFAULT,
-    fontSize:   12,
-    fontWeight: typography.weight.medium,
+    fontSize:        13,
+    fontWeight:      typography.weight.medium,
   },
 
   shareConnBtn: {
@@ -292,7 +284,7 @@ const conn = StyleSheet.create({
 
   shareConnText: {
     color:      colors.text.secondary,
-    fontSize:   11,
+    fontSize:   11.5,
     fontWeight: typography.weight.medium,
   },
 });
@@ -856,7 +848,7 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
     {
       id: 'connections',
       label: isAnalyzingConnections ? 'Mapeando Conexões…' : 'Mapear Conexões Bíblicas',
-      description: 'Identificar ressonâncias e versículos com IA teológica',
+      description: 'Mapear passagens e conexões com as Escrituras',
       icon: 'compass',
       variant: 'accent',
       disabled: isAnalyzingConnections,
@@ -995,7 +987,7 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
           ) : null}
 
           {currentEntry.bible_ref ? (
-            <BibleRefChip
+            <BibleRefAnchor
               display={currentEntry.bible_ref.display}
               onPress={handleBibleRefPress}
             />

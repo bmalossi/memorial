@@ -3,6 +3,60 @@
  * Alinhado com o padrão canônico do Bíblia Vive
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export type BibleVersion = 'acf' | 'arc' | 'nvi';
+
+export interface BibleVersionInfo {
+  id: BibleVersion;
+  label: string;
+  name: string;
+  description: string;
+}
+
+export const BIBLE_VERSIONS: BibleVersionInfo[] = [
+  {
+    id: 'acf',
+    label: 'ACF',
+    name: 'Almeida Corrigida Fiel',
+    description: 'Tradução clássica e fiel ao Textus Receptus, com linguagem solene e tradicional.',
+  },
+  {
+    id: 'arc',
+    label: 'ARC',
+    name: 'Almeida Revista e Corrigida',
+    description: 'A tradução histórica tradicional consagrada pela leitura nas igrejas brasileiras.',
+  },
+  {
+    id: 'nvi',
+    label: 'NVI',
+    name: 'Nova Versão Internacional',
+    description: 'Linguagem moderna e fluida, com foco em clareza, fidelidade e leitura devocional.',
+  },
+];
+
+export const BIBLE_VERSION_STORAGE_KEY = '@memorial_bible_version';
+
+export async function getStoredBibleVersion(): Promise<BibleVersion> {
+  try {
+    const val = await AsyncStorage.getItem(BIBLE_VERSION_STORAGE_KEY);
+    if (val === 'acf' || val === 'arc' || val === 'nvi') {
+      return val;
+    }
+  } catch (e) {
+    // ignore
+  }
+  return 'acf';
+}
+
+export async function setStoredBibleVersion(version: BibleVersion): Promise<void> {
+  try {
+    await AsyncStorage.setItem(BIBLE_VERSION_STORAGE_KEY, version);
+  } catch (e) {
+    // ignore
+  }
+}
+
 export interface BibleBookInfo {
   name: string;
   slug: string;
@@ -93,6 +147,7 @@ export interface BibleChapterData {
   bookSlug: string;
   chapter: number;
   title?: string;
+  version?: BibleVersion;
   verses: BibleVerseItem[];
 }
 
@@ -345,16 +400,45 @@ export function findBook(slugOrName: string): BibleBookInfo | undefined {
   });
 }
 
+const MEMORY_CHAPTER_CACHE: Record<string, BibleChapterData> = {};
+
 /**
  * Busca capítulo bíblico com fallback resiliente e suporte aos 66 livros da Bíblia
+ * em 3 versões: ACF (Almeida Corrigida Fiel), ARC (Almeida Revista e Corrigida) e NVI (Nova Versão Internacional)
  */
-export async function loadBibleChapter(bookSlug: string, chapter: number): Promise<BibleChapterData> {
+export async function loadBibleChapter(
+  bookSlug: string,
+  chapter: number,
+  version: BibleVersion = 'acf'
+): Promise<BibleChapterData> {
   const normSlug = normalizeBookSlug(bookSlug);
-  const cacheKey = `${normSlug}:${chapter}`;
+  const cacheKey = `${version}:${normSlug}:${chapter}`;
 
-  // 1. Checa cache offline instantâneo
-  if (OFFLINE_CHAPTERS[cacheKey]) {
-    return OFFLINE_CHAPTERS[cacheKey];
+  // 1. Checa cache em memória da versão solicitada
+  if (MEMORY_CHAPTER_CACHE[cacheKey]) {
+    return MEMORY_CHAPTER_CACHE[cacheKey];
+  }
+
+  // 2. Checa cache persistido no AsyncStorage para leitura offline completa
+  try {
+    const cachedJson = await AsyncStorage.getItem(`@memorial_bible_ch:${cacheKey}`);
+    if (cachedJson) {
+      const parsed = JSON.parse(cachedJson) as BibleChapterData;
+      MEMORY_CHAPTER_CACHE[cacheKey] = parsed;
+      return parsed;
+    }
+  } catch (e) {
+    // ignora falha de leitura de cache local
+  }
+
+  // 3. Checa cache pré-embutido offline para ACF
+  if (version === 'acf' && OFFLINE_CHAPTERS[`${normSlug}:${chapter}`]) {
+    const offlineItem: BibleChapterData = {
+      ...OFFLINE_CHAPTERS[`${normSlug}:${chapter}`],
+      version: 'acf',
+    };
+    MEMORY_CHAPTER_CACHE[cacheKey] = offlineItem;
+    return offlineItem;
   }
 
   const book = findBook(normSlug) || {
@@ -368,9 +452,9 @@ export async function loadBibleChapter(bookSlug: string, chapter: number): Promi
   // Mapeia para o ID exato da pasta no repositório GitHub (ex: sl -> ps, jo -> job, joa -> jo)
   const githubId = ROUTE_TO_GITHUB_ID[normSlug] || normSlug;
 
-  // 2. Busca da API pública do GitHub (ACF - Almeida Corrigida Fiel)
+  // 4. Busca da API do GitHub para a versão selecionada (ACF, ARC ou NVI)
   try {
-    const url = `https://raw.githubusercontent.com/MaatheusGois/bible/main/versions/pt-br/acf/${githubId}/${githubId}.json`;
+    const url = `https://raw.githubusercontent.com/MaatheusGois/bible/main/versions/pt-br/${version}/${githubId}/${githubId}.json`;
     const res = await fetch(url);
     if (res.ok) {
       const data = await res.json();
@@ -381,25 +465,42 @@ export async function loadBibleChapter(bookSlug: string, chapter: number): Promi
           bookName: data.name || book.name,
           bookSlug: normSlug,
           chapter,
+          version,
           verses: versesRaw.map((v, i) => ({
             number: i + 1,
             text: v.trim(),
           })),
         };
         // Salva em memória
-        OFFLINE_CHAPTERS[cacheKey] = loaded;
+        MEMORY_CHAPTER_CACHE[cacheKey] = loaded;
+
+        // Salva no AsyncStorage em background para acesso offline futuro
+        AsyncStorage.setItem(
+          `@memorial_bible_ch:${cacheKey}`,
+          JSON.stringify(loaded)
+        ).catch(() => {});
+
         return loaded;
       }
     }
   } catch (e) {
-    console.warn(`[Memorial Bible] Falha ao buscar capítulo online para ${normSlug} (${githubId}) ${chapter}:`, e);
+    console.warn(`[Memorial Bible] Falha ao buscar capítulo online para ${normSlug} (${githubId}) ${chapter} na versão ${version}:`, e);
   }
 
-  // 3. Fallback sem internet caso não esteja em cache prévio
+  // 5. Fallback se estiver offline: se tivermos versão ACF offline pré-carregada, entregamos com indicação
+  if (OFFLINE_CHAPTERS[`${normSlug}:${chapter}`]) {
+    return {
+      ...OFFLINE_CHAPTERS[`${normSlug}:${chapter}`],
+      version: 'acf',
+    };
+  }
+
+  // 6. Fallback sem internet caso não esteja em cache prévio
   return {
     bookName: book.name,
     bookSlug: normSlug,
     chapter,
+    version,
     verses: [
       {
         number: 1,

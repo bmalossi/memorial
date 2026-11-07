@@ -6,6 +6,7 @@ export interface BibleRef {
   chapter: number;   // 23
   verse?:  number;   // 1 (opcional)
   display: string;   // "Salmos 23:1"
+  version?: string;  // "ACF" | "ARC" | "NVI"
 }
 
 export type JevCategory =
@@ -26,9 +27,9 @@ export const JEV_CONFIG: Record<
   },
   Eco_de_Linguagem: {
     label: 'Eco de Linguagem',
-    tag: 'RESSONÂNCIA',
-    description: 'Ressonância temática de termos e imagens bíblicas',
-    icon: 'repeat',
+    tag: 'ESCRITURA',
+    description: 'Conexão temática com imagens e passagens bíblicas',
+    icon: 'book-open',
   },
   Contraste_de_Alianca: {
     label: 'Contraste de Aliança',

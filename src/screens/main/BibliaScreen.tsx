@@ -19,10 +19,14 @@ import {
   BIBLE_BOOKS,
   BibleChapterData,
   BibleBookInfo,
+  BibleVersion,
   loadBibleChapter,
   findBook,
+  getStoredBibleVersion,
+  setStoredBibleVersion,
 } from '../../lib/bibleData';
 import { BookPickerModal } from '../../components/bible/BookPickerModal';
+import { VersionPickerModal } from '../../components/bible/VersionPickerModal';
 import { NovoRegistroSheet } from '../../components/memorial/NovoRegistroSheet';
 import { MemorialEntry } from '../../lib/types';
 import { saveUserMemorial } from '../../lib/memorialStore';
@@ -68,6 +72,10 @@ export function BibliaScreen({ navigation, route }: Props) {
 
   const [pickerVisible, setPickerVisible] = useState(false);
 
+  // Versão da Bíblia (ACF, ARC, NVI)
+  const [bibleVersion, setBibleVersion] = useState<BibleVersion>('acf');
+  const [versionModalVisible, setVersionModalVisible] = useState(false);
+
   // Escala de tamanho de texto (15px, 17px, 20px)
   const [fontSizeLevel, setFontSizeLevel] = useState<15 | 17 | 20>(17);
 
@@ -76,8 +84,8 @@ export function BibliaScreen({ navigation, route }: Props) {
   const [savingMarco, setSavingMarco] = useState(false);
 
   // Modal de Compartilhamento Visual Editorial
-  const [visualShareVisible, setVisualShareVisible] = useState(false);
   const [visualShareData, setVisualShareData] = useState<VisualShareData | null>(null);
+  const [visualShareVisible, setVisualShareVisible] = useState(false);
 
   // Modais Editoriais (Zero Alert.alert genérico)
   const [saveSuccessModal, setSaveSuccessModal] = useState<{
@@ -93,7 +101,15 @@ export function BibliaScreen({ navigation, route }: Props) {
   // Animação da barra flutuante de ação do versículo
   const barAnim = useRef(new Animated.Value(0)).current;
   const fontScaleAnim = useRef(new Animated.Value(1)).current;
+  const versionScaleAnim = useRef(new Animated.Value(1)).current;
   const passagePillScale = useRef(new Animated.Value(1)).current;
+
+  // Carrega a versão salva da Bíblia na inicialização
+  useEffect(() => {
+    getStoredBibleVersion().then((saved) => {
+      if (saved) setBibleVersion(saved);
+    });
+  }, []);
 
   // Escuta parâmetros de rota (quando o Leitor clica em "Ler passagem" no detalhe do marco)
   useEffect(() => {
@@ -111,12 +127,12 @@ export function BibliaScreen({ navigation, route }: Props) {
     }
   }, [route?.params]);
 
-  // Carrega os dados do capítulo sempre que mudar o livro ou capítulo
+  // Carrega os dados do capítulo sempre que mudar o livro, capítulo ou versão
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
 
-    loadBibleChapter(currentBookSlug, currentChapter).then((data) => {
+    loadBibleChapter(currentBookSlug, currentChapter, bibleVersion).then((data) => {
       if (isMounted) {
         setChapterData(data);
         setLoading(false);
@@ -126,7 +142,7 @@ export function BibliaScreen({ navigation, route }: Props) {
     return () => {
       isMounted = false;
     };
-  }, [currentBookSlug, currentChapter]);
+  }, [currentBookSlug, currentChapter, bibleVersion]);
 
   // Anima barra flutuante quando um versículo é selecionado/desmarcado
   useEffect(() => {
@@ -180,6 +196,25 @@ export function BibliaScreen({ navigation, route }: Props) {
     else setFontSizeLevel(15);
   };
 
+  const handleSelectVersion = async (v: BibleVersion) => {
+    Animated.sequence([
+      Animated.timing(versionScaleAnim, { toValue: 0.86, duration: 60, useNativeDriver: true }),
+      Animated.spring(versionScaleAnim, { toValue: 1, tension: 350, friction: 8, useNativeDriver: true }),
+    ]).start();
+
+    setBibleVersion(v);
+    await setStoredBibleVersion(v);
+  };
+
+  const handleCycleVersion = () => {
+    const next: Record<BibleVersion, BibleVersion> = {
+      acf: 'arc',
+      arc: 'nvi',
+      nvi: 'acf',
+    };
+    handleSelectVersion(next[bibleVersion]);
+  };
+
   const currentBookInfo = findBook(currentBookSlug) || {
     name: chapterData?.bookName || 'Salmos',
     slug: currentBookSlug,
@@ -214,10 +249,11 @@ export function BibliaScreen({ navigation, route }: Props) {
 
   const handleShareVerse = () => {
     if (!selectedVerseObj || !chapterData) return;
+    const versionLabel = bibleVersion.toUpperCase();
     setVisualShareData({
-      title: `${chapterData.bookName} ${chapterData.chapter}:${selectedVerseObj.number}`,
+      title: `${chapterData.bookName} ${chapterData.chapter}:${selectedVerseObj.number} (${versionLabel})`,
       content: selectedVerseObj.text,
-      bibleRefDisplay: `${chapterData.bookName} ${chapterData.chapter}:${selectedVerseObj.number}`,
+      bibleRefDisplay: `${chapterData.bookName} ${chapterData.chapter}:${selectedVerseObj.number} (${versionLabel})`,
       date: new Date().toISOString(),
       category: 'reflexao',
     });
@@ -284,8 +320,23 @@ export function BibliaScreen({ navigation, route }: Props) {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Ações à direita: Ajuste de fonte */}
+        {/* Ações à direita: Versão da Bíblia (ACF, ARC, NVI) e Ajuste de fonte (AA) */}
         <View style={s.headerRight}>
+          {/* Quadrado de Versão da Bíblia ao lado do AA */}
+          <Animated.View style={{ transform: [{ scale: versionScaleAnim }] }}>
+            <TouchableOpacity
+              onPress={() => setVersionModalVisible(true)}
+              onLongPress={handleCycleVersion}
+              style={s.versionButton}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Versão da Bíblia: ${bibleVersion.toUpperCase()}. Toque para escolher entre ACF, ARC e NVI`}
+            >
+              <Text style={s.versionButtonText}>{bibleVersion.toUpperCase()}</Text>
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Quadrado de Ajuste de tamanho da letra (AA) */}
           <Animated.View style={{ transform: [{ scale: fontScaleAnim }] }}>
             <TouchableOpacity
               onPress={handleToggleFontSize}
@@ -319,16 +370,38 @@ export function BibliaScreen({ navigation, route }: Props) {
           {/* Título editorial do capítulo se disponível */}
           {chapterData?.title ? (
             <View style={s.chapterTitleWrap}>
-              <Text style={s.chapterSuper}>
-                {chapterData.bookName.toUpperCase()} {chapterData.chapter}
-              </Text>
+              <View style={s.chapterHeaderRow}>
+                <Text style={s.chapterSuper}>
+                  {chapterData.bookName.toUpperCase()} {chapterData.chapter}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setVersionModalVisible(true)}
+                  style={s.versionTag}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Mudar versão da Bíblia"
+                >
+                  <Text style={s.versionTagText}>{bibleVersion.toUpperCase()}</Text>
+                </TouchableOpacity>
+              </View>
               <Text style={s.chapterTitle}>{chapterData.title}</Text>
             </View>
           ) : (
             <View style={s.chapterTitleWrap}>
-              <Text style={s.chapterSuper}>
-                {chapterData?.bookName.toUpperCase()}
-              </Text>
+              <View style={s.chapterHeaderRow}>
+                <Text style={s.chapterSuper}>
+                  {chapterData?.bookName.toUpperCase()}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setVersionModalVisible(true)}
+                  style={s.versionTag}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Mudar versão da Bíblia"
+                >
+                  <Text style={s.versionTagText}>{bibleVersion.toUpperCase()}</Text>
+                </TouchableOpacity>
+              </View>
               <Text style={s.chapterTitle}>Capítulo {chapterData?.chapter}</Text>
             </View>
           )}
@@ -506,6 +579,14 @@ export function BibliaScreen({ navigation, route }: Props) {
         onSelect={handleSelectPassage}
       />
 
+      {/* Modal seletor de versões da Bíblia (ACF, ARC, NVI) */}
+      <VersionPickerModal
+        visible={versionModalVisible}
+        currentVersion={bibleVersion}
+        onClose={() => setVersionModalVisible(false)}
+        onSelectVersion={handleSelectVersion}
+      />
+
       {/* Sheet para Novo Registro pré-configurado com o versículo bíblico */}
       <NovoRegistroSheet
         visible={registroSheetVisible}
@@ -519,7 +600,8 @@ export function BibliaScreen({ navigation, route }: Props) {
                 slug: currentBookSlug,
                 chapter: currentChapter,
                 verse: selectedVerseNum,
-                display: `${chapterData.bookName} ${currentChapter}:${selectedVerseNum}`,
+                version: bibleVersion.toUpperCase(),
+                display: `${chapterData.bookName} ${currentChapter}:${selectedVerseNum} (${bibleVersion.toUpperCase()})`,
               }
             : null
         }
@@ -614,6 +696,23 @@ function getBibliaStyles(colors: ColorTokens, isDark: boolean) {
     alignItems: 'center',
     gap: spacing['2'],
   },
+  versionButton: {
+    minWidth: 42,
+    height: 36,
+    paddingHorizontal: 6,
+    borderRadius: radius.sm,
+    backgroundColor: colors.bg.raised,
+    borderWidth: 1,
+    borderColor: colors.border.DEFAULT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  versionButtonText: {
+    color: colors.amber.DEFAULT,
+    fontSize: 11,
+    fontWeight: typography.weight.bold,
+    letterSpacing: 0.5,
+  },
   iconButton: {
     width: 36,
     height: 36,
@@ -653,6 +752,25 @@ function getBibliaStyles(colors: ColorTokens, isDark: boolean) {
     paddingBottom: spacing['4'],
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border.subtle,
+  },
+  chapterHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  versionTag: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radius.xs,
+    backgroundColor: colors.bg.raised,
+    borderWidth: 1,
+    borderColor: colors.border.subtle,
+  },
+  versionTagText: {
+    color: colors.amber.DEFAULT,
+    fontSize: 10,
+    fontWeight: typography.weight.bold,
+    letterSpacing: 0.8,
   },
   chapterSuper: {
     color: colors.amber.DEFAULT,
