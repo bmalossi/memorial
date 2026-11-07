@@ -910,6 +910,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
   const [isSendingPastoralAction, setIsSendingPastoralAction] = useState(false);
   const [atalaiaModalVisible, setAtalaiaModalVisible] = useState(false);
   const [pastoralContact, setPastoralContact] = useState<PastoralContact | null>(null);
+  const [isPastoralLoaded, setIsPastoralLoaded] = useState(false);
   const [feedbackDialog, setFeedbackDialog] = useState<{
     visible: boolean;
     title: string;
@@ -938,6 +939,8 @@ export function LinhasagradaScreen({ navigation }: Props) {
       setPastoralContact(contact);
     } catch (e) {
       console.warn('[Linhasagrada] Erro ao carregar contato pastoral:', e);
+    } finally {
+      setIsPastoralLoaded(true);
     }
   };
 
@@ -1507,7 +1510,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
       )}
 
       <PastoralOnboardingBanner
-        visible={!loading && !pastoralContact && !isSearchOpen}
+        visible={isPastoralLoaded && !loading && !pastoralContact && !isSearchOpen}
         onLinkPastor={() => setAtalaiaModalVisible(true)}
       />
 

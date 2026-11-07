@@ -27,29 +27,67 @@ import {
   validateTriageResponse,
 } from './atalaiaTypes';
 
+export const PASTORAL_CONTACT_CACHE_KEY = '@memorial/pastoral_contact_cache';
+
+/**
+ * Retorna o contato pastoral armazenado localmente no cache em 0ms.
+ */
+export async function getCachedPastoralContact(): Promise<PastoralContact | null> {
+  try {
+    const raw = await AsyncStorage.getItem(PASTORAL_CONTACT_CACHE_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch {}
+  return null;
+}
+
 /**
  * Busca o contato pastoral atual do Leitor.
  * Prioriza contato com status 'active', depois 'pending'.
+ * Utiliza cache local no AsyncStorage para evitar piscadas (flicker) na inicialização.
  */
 export async function fetchCurrentPastoralContact(): Promise<PastoralContact | null> {
+  const cached = await getCachedPastoralContact();
+
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  const { data, error } = await supabase
-    .from('pastoral_contacts')
-    .select('*')
-    .eq('user_id', user.id)
-    .in('status', ['active', 'pending'])
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    console.warn('[AtalaiaStore] Erro ao buscar contato pastoral:', error.message);
+  if (!user) {
+    if (cached) {
+      await AsyncStorage.removeItem(PASTORAL_CONTACT_CACHE_KEY).catch(() => {});
+    }
     return null;
   }
 
-  return data as PastoralContact | null;
+  // Se o cache for de outro usuário, desconsidera
+  const validCache = cached && cached.user_id === user.id ? cached : null;
+
+  try {
+    const { data, error } = await supabase
+      .from('pastoral_contacts')
+      .select('*')
+      .eq('user_id', user.id)
+      .in('status', ['active', 'pending'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[AtalaiaStore] Erro ao buscar contato pastoral:', error.message);
+      return validCache;
+    }
+
+    const contact = (data as PastoralContact) || null;
+    if (contact) {
+      await AsyncStorage.setItem(PASTORAL_CONTACT_CACHE_KEY, JSON.stringify(contact)).catch(() => {});
+    } else {
+      await AsyncStorage.removeItem(PASTORAL_CONTACT_CACHE_KEY).catch(() => {});
+    }
+
+    return contact;
+  } catch (err) {
+    console.warn('[AtalaiaStore] Erro de rede ao buscar contato pastoral:', err);
+    return validCache;
+  }
 }
 
 /**
@@ -75,6 +113,7 @@ export async function sendPastoralInvitation(
     });
 
     if (!error && data?.success && data?.contact) {
+      await AsyncStorage.setItem(PASTORAL_CONTACT_CACHE_KEY, JSON.stringify(data.contact)).catch(() => {});
       return { success: true, contact: data.contact as PastoralContact };
     }
     if (error && error.message && !error.message.includes('Failed to send')) {
@@ -116,6 +155,10 @@ export async function sendPastoralInvitation(
   if (error) {
     console.error('[AtalaiaStore] Falha ao cadastrar contato:', error.message);
     return { success: false, error: 'Não foi possível cadastrar o contato no momento. Tente novamente em instantes.' };
+  }
+
+  if (data) {
+    await AsyncStorage.setItem(PASTORAL_CONTACT_CACHE_KEY, JSON.stringify(data)).catch(() => {});
   }
 
   return { success: true, contact: data as PastoralContact };
@@ -162,6 +205,8 @@ export async function revokePastoralContact(
     console.error('[AtalaiaStore] Falha ao revogar contato:', error.message);
     return { success: false, error: 'Não foi possível revogar o contato no momento. Tente novamente em instantes.' };
   }
+
+  await AsyncStorage.removeItem(PASTORAL_CONTACT_CACHE_KEY).catch(() => {});
 
   return { success: true };
 }

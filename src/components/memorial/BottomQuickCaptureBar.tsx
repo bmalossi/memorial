@@ -53,6 +53,8 @@ export function BottomQuickCaptureBar({
   const recordingTimer = useRef<any>(null);
   const isRecordingRef = useRef(false);
   const isLocalLiveDictationRef = useRef(false);
+  const isTogglingVoiceRef = useRef(false);
+  const recordingStartTimeRef = useRef(0);
   isRecordingRef.current = isRecording;
   isLocalLiveDictationRef.current = isLocalLiveDictation;
 
@@ -103,7 +105,9 @@ export function BottomQuickCaptureBar({
   // Interrupções do sistema (ligação, app em segundo plano) encerram a gravação sem travar o app
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'active' && isRecordingRef.current) {
+      // Encerra apenas quando o aplicativo for de fato enviado para background (ex: chamada telefônica ou minimizar app)
+      // Não encerra em transições efêmeras como 'inactive' (diálogos de permissão ou chaveamento de foco de áudio)
+      if (nextState === 'background' && isRecordingRef.current) {
         handleCancelVoice();
       }
     });
@@ -111,42 +115,84 @@ export function BottomQuickCaptureBar({
   }, []);
 
   const handleToggleVoice = async () => {
-    if (isTranscribing) return;
+    if (isTranscribing || isTogglingVoiceRef.current) return;
+    isTogglingVoiceRef.current = true;
 
-    if (isRecording) {
-      if (isLocalLiveDictation) {
+    try {
+      if (isRecording) {
+        // Trava defensiva contra duplo clique involuntário: exige pelo menos 700ms de gravação para parar
+        if (Date.now() - recordingStartTimeRef.current < 700) {
+          return;
+        }
+
+        if (isLocalLiveDictation) {
+          try {
+            if (recordingTimer.current) clearInterval(recordingTimer.current);
+            setIsRecording(false);
+            setIsLocalLiveDictation(false);
+            setIsTranscribing(true);
+            setTranscribeMessage('Finalizando reconhecimento no aparelho...');
+
+            const finalText = await recognizer.stop();
+            const base = baseContentBeforeLiveRef.current.trim();
+            const combined = finalText && finalText.trim()
+              ? (base ? `${base}\n\n${finalText.trim()}` : finalText.trim())
+              : '';
+
+            if (combined) {
+              onChangeText('');
+              setTranscribeMessage('Registrando memória...');
+              await onSubmit(combined);
+            } else if (base) {
+              onChangeText(base);
+            }
+          } catch (err: any) {
+            console.warn('[QuickCapture] Erro ao finalizar ditado local:', err);
+            const title =
+              err?.code === 'no_speech_detected'
+                ? 'Nenhuma Fala Detectada'
+                : 'Reconhecimento de Voz';
+            onError?.(title, err.message || 'Não foi possível processar a fala gravada.');
+            if (baseContentBeforeLiveRef.current) {
+              onChangeText(baseContentBeforeLiveRef.current);
+            }
+          } finally {
+            setIsTranscribing(false);
+            setTranscribeMessage('');
+            setRecordingSeconds(0);
+          }
+          return;
+        }
+
         try {
-          if (recordingTimer.current) clearInterval(recordingTimer.current);
           setIsRecording(false);
-          setIsLocalLiveDictation(false);
           setIsTranscribing(true);
-          setTranscribeMessage('Finalizando reconhecimento no aparelho...');
+          setTranscribeMessage('Finalizando áudio...');
 
-          const finalText = await recognizer.stop();
-          const base = baseContentBeforeLiveRef.current.trim();
-          const combined = finalText && finalText.trim()
-            ? (base ? `${base}\n\n${finalText.trim()}` : finalText.trim())
-            : '';
+          const uri = await stopNativeRecording();
+          setTranscribeMessage('Transcrevendo relato...');
 
-          setIsLocalModeNotice(true);
+          const transcript = await transcribeAudioUri(uri, (p) => {
+            setTranscribeMessage(p.message);
+            if (p.status === 'local') {
+              setIsLocalModeNotice(true);
+            }
+          });
 
-          if (combined) {
+          if (transcript && transcript.trim()) {
+            const updated = value.trim()
+              ? `${value.trim()}\n\n${transcript.trim()}`
+              : transcript.trim();
             onChangeText('');
             setTranscribeMessage('Registrando memória...');
-            await onSubmit(combined);
-          } else if (base) {
-            onChangeText(base);
+            await onSubmit(updated);
           }
         } catch (err: any) {
-          console.warn('[QuickCapture] Erro ao finalizar ditado local:', err);
-          const title =
-            err?.code === 'no_speech_detected'
-              ? 'Nenhuma Fala Detectada'
-              : 'Reconhecimento de Voz';
-          onError?.(title, err.message || 'Não foi possível processar a fala gravada.');
-          if (baseContentBeforeLiveRef.current) {
-            onChangeText(baseContentBeforeLiveRef.current);
-          }
+          console.warn('[QuickCapture] Erro ao transcrever:', err);
+          onError?.(
+            'Transcrição de Áudio',
+            err.message || 'Não foi possível transcrever o áudio gravado.'
+          );
         } finally {
           setIsTranscribing(false);
           setTranscribeMessage('');
@@ -155,128 +201,98 @@ export function BottomQuickCaptureBar({
         return;
       }
 
-      try {
-        setIsRecording(false);
-        setIsTranscribing(true);
-        setTranscribeMessage('Finalizando áudio...');
+      const decision = await decideTranscriptionEngine();
 
-        const uri = await stopNativeRecording();
-        setTranscribeMessage('Transcrevendo relato...');
+      // Se a cota foi renovada e temos conexão, volta sozinho ao modo premium
+      if (decision.engine === 'premium' && isLocalModeNotice) {
+        setIsLocalModeNotice(false);
+      }
 
-        const transcript = await transcribeAudioUri(uri, (p) => {
-          setTranscribeMessage(p.message);
-          if (p.status === 'local') {
+      const shouldRunLocal =
+        decision.engine === 'local' ||
+        (isLocalModeNotice && decision.engine !== 'premium');
+
+      // Se o modo local estiver indicado (cota esgotada, offline, ou ativo previamente)
+      if (shouldRunLocal) {
+        const isAvail = await recognizer.isAvailable();
+        if (isAvail) {
+          if (decision.reason === 'quota_exceeded' || decision.reason === 'offline') {
             setIsLocalModeNotice(true);
           }
-        });
+          try {
+            recordingStartTimeRef.current = Date.now();
+            setIsLocalLiveDictation(true);
+            setIsRecording(true);
+            setRecordingSeconds(0);
+            baseContentBeforeLiveRef.current = value;
 
-        if (transcript && transcript.trim()) {
-          const updated = value.trim()
-            ? `${value.trim()}\n\n${transcript.trim()}`
-            : transcript.trim();
-          onChangeText('');
-          setTranscribeMessage('Registrando memória...');
-          await onSubmit(updated);
+            if (recordingTimer.current) clearInterval(recordingTimer.current);
+            recordingTimer.current = setInterval(() => {
+              setRecordingSeconds((prev) => prev + 1);
+            }, 1000);
+
+            await recognizer.start({
+              onPartialResult: (partialText) => {
+                const base = baseContentBeforeLiveRef.current.trim();
+                if (partialText) {
+                  onChangeText(base ? `${base}\n\n${partialText}` : partialText);
+                }
+              },
+            });
+            return;
+          } catch (liveErr: any) {
+            if (recordingTimer.current) clearInterval(recordingTimer.current);
+            setIsLocalLiveDictation(false);
+            setIsRecording(false);
+            const title =
+              liveErr?.code === 'language_pack_missing'
+                ? 'Pacote de Voz pt-BR'
+                : liveErr?.code === 'permission_denied'
+                ? 'Permissão de Reconhecimento'
+                : 'Reconhecimento de Voz Local';
+            onError?.(
+              title,
+              liveErr.message || 'Não foi possível iniciar o reconhecimento de voz no aparelho.'
+            );
+            return;
+          }
         }
-      } catch (err: any) {
-        console.warn('[QuickCapture] Erro ao transcrever:', err);
+      }
+
+      if (!isNativeAudioAvailable()) {
         onError?.(
-          'Transcrição de Áudio',
-          err.message || 'Não foi possível transcrever o áudio gravado.'
+          'Gravação de Voz Nativa',
+          'A gravação de voz com transcrição em tempo real requer a Dev Build do Memorial.'
         );
-      } finally {
-        setIsTranscribing(false);
-        setTranscribeMessage('');
+        return;
+      }
+
+      try {
+        recordingStartTimeRef.current = Date.now();
         setRecordingSeconds(0);
-      }
-      return;
-    }
-
-    const decision = await decideTranscriptionEngine();
-
-    // Se a cota foi renovada e temos conexão, volta sozinho ao modo premium
-    if (decision.engine === 'premium' && isLocalModeNotice) {
-      setIsLocalModeNotice(false);
-    }
-
-    const shouldRunLocal =
-      decision.engine === 'local' ||
-      (isLocalModeNotice && decision.engine !== 'premium');
-
-    // Se o modo local estiver indicado (cota esgotada, offline, ou ativo previamente)
-    if (shouldRunLocal) {
-      const isAvail = await recognizer.isAvailable();
-      if (isAvail) {
-        if (decision.reason === 'quota_exceeded' || decision.reason === 'offline') {
-          setIsLocalModeNotice(true);
-        }
-        try {
-          setIsLocalLiveDictation(true);
-          setIsRecording(true);
-          setRecordingSeconds(0);
-          baseContentBeforeLiveRef.current = value;
-
-          if (recordingTimer.current) clearInterval(recordingTimer.current);
-          recordingTimer.current = setInterval(() => {
-            setRecordingSeconds((prev) => prev + 1);
-          }, 1000);
-
-          await recognizer.start({
-            onPartialResult: (partialText) => {
-              const base = baseContentBeforeLiveRef.current.trim();
-              if (partialText) {
-                onChangeText(base ? `${base}\n\n${partialText}` : partialText);
-              }
-            },
-          });
-          return;
-        } catch (liveErr: any) {
-          if (recordingTimer.current) clearInterval(recordingTimer.current);
-          setIsLocalLiveDictation(false);
-          setIsRecording(false);
-          const title =
-            liveErr?.code === 'language_pack_missing'
-              ? 'Pacote de Voz pt-BR'
-              : liveErr?.code === 'permission_denied'
-              ? 'Permissão de Reconhecimento'
-              : 'Reconhecimento de Voz Local';
+        setIsRecording(true);
+        await startNativeRecording((secs) => {
+          setRecordingSeconds(secs);
+        });
+      } catch (err: any) {
+        setIsRecording(false);
+        setIsLocalLiveDictation(false);
+        setRecordingSeconds(0);
+        console.warn('[QuickCapture] Erro ao gravar voz:', err);
+        if (err.message === 'PERMISSION_DENIED') {
           onError?.(
-            title,
-            liveErr.message || 'Não foi possível iniciar o reconhecimento de voz no aparelho.'
+            'Permissão de Microfone',
+            'O Memorial precisa de autorização de microfone para registrar memórias por voz.'
           );
-          return;
+        } else {
+          onError?.(
+            'Gravação de Áudio',
+            err.message || 'Não foi possível iniciar o microfone neste momento.'
+          );
         }
       }
-    }
-
-    if (!isNativeAudioAvailable()) {
-      onError?.(
-        'Gravação de Voz Nativa',
-        'A gravação de voz com transcrição em tempo real requer a Dev Build do Memorial.'
-      );
-      return;
-    }
-
-    try {
-      setRecordingSeconds(0);
-      setIsRecording(true);
-      await startNativeRecording((secs) => {
-        setRecordingSeconds(secs);
-      });
-    } catch (err: any) {
-      setIsRecording(false);
-      console.warn('[QuickCapture] Erro ao gravar voz:', err);
-      if (err.message === 'PERMISSION_DENIED') {
-        onError?.(
-          'Permissão de Microfone',
-          'O Memorial precisa de autorização de microfone para registrar memórias por voz.'
-        );
-      } else {
-        onError?.(
-          'Gravação de Áudio',
-          err.message || 'Não foi possível iniciar o microfone neste momento.'
-        );
-      }
+    } finally {
+      isTogglingVoiceRef.current = false;
     }
   };
 
