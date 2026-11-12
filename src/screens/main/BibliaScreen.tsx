@@ -27,6 +27,7 @@ import {
 } from '../../lib/bibleData';
 import { BookPickerModal } from '../../components/bible/BookPickerModal';
 import { VersionPickerModal } from '../../components/bible/VersionPickerModal';
+import { recordChapterView } from '../../lib/chapterReadingService';
 import { NovoRegistroSheet } from '../../components/memorial/NovoRegistroSheet';
 import { MemorialEntry } from '../../lib/types';
 import { saveUserMemorial } from '../../lib/memorialStore';
@@ -143,6 +144,16 @@ export function BibliaScreen({ navigation, route }: Props) {
       isMounted = false;
     };
   }, [currentBookSlug, currentChapter, bibleVersion]);
+
+  // Registra a leitura do capítulo após confirmação de carregamento (com debounce para não poluir em navegação rápida)
+  useEffect(() => {
+    if (!chapterData || loading) return;
+    const timer = setTimeout(() => {
+      recordChapterView(currentBookSlug, currentChapter).catch(() => {});
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [currentBookSlug, currentChapter, chapterData, loading]);
 
   // Anima barra flutuante quando um versículo é selecionado/desmarcado
   useEffect(() => {

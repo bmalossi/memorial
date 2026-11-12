@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useTheme, ColorTokens, typography, spacing, radius } from '../../theme';
-import { BIBLE_BOOKS, BibleBookInfo } from '../../lib/bibleData';
+import { BIBLE_BOOKS, BibleBookInfo, findBook } from '../../lib/bibleData';
+import { getVisitedChaptersForBook } from '../../lib/chapterReadingService';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -22,6 +23,7 @@ interface Props {
   currentChapter: number;
   onClose: () => void;
   onSelect: (book: BibleBookInfo, chapter: number) => void;
+  visitedChapters?: number[];
 }
 
 export function BookPickerModal({
@@ -30,14 +32,51 @@ export function BookPickerModal({
   currentChapter,
   onClose,
   onSelect,
+  visitedChapters: externalVisitedChapters,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const [testament, setTestament] = useState<'AT' | 'NT'>('AT');
   const [search, setSearch] = useState('');
   const [selectedBook, setSelectedBook] = useState<BibleBookInfo | null>(null);
+  const [internalVisitedChapters, setInternalVisitedChapters] = useState<number[]>([]);
 
   const s = useMemo(() => getPickerStyles(colors, isDark), [colors, isDark]);
+
+  // Ao abrir o modal, inicializa com o livro atual caso existente
+  useEffect(() => {
+    if (visible) {
+      if (currentBookSlug) {
+        const book = findBook(currentBookSlug);
+        setSelectedBook(book || null);
+        if (book?.testament) {
+          setTestament(book.testament);
+        }
+      } else {
+        setSelectedBook(null);
+      }
+      setSearch('');
+    }
+  }, [visible, currentBookSlug]);
+
+  // Carrega os capítulos lidos para o livro atualmente selecionado
+  useEffect(() => {
+    let isMounted = true;
+    if (selectedBook?.slug) {
+      getVisitedChaptersForBook(selectedBook.slug).then((chapters) => {
+        if (isMounted) {
+          setInternalVisitedChapters(chapters);
+        }
+      });
+    } else {
+      setInternalVisitedChapters([]);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedBook?.slug, visible]);
+
+  const visitedChapters = externalVisitedChapters || internalVisitedChapters;
 
   const filteredBooks = BIBLE_BOOKS.filter((b) => {
     if (search.trim()) {
@@ -54,7 +93,6 @@ export function BookPickerModal({
   const handleSelectChapter = (ch: number) => {
     if (selectedBook) {
       onSelect(selectedBook, ch);
-      setSelectedBook(null);
       setSearch('');
       onClose();
     }
@@ -127,18 +165,27 @@ export function BookPickerModal({
                 {Array.from({ length: selectedBook.chapters }, (_, i) => i + 1).map((ch) => {
                   const isCurrent =
                     selectedBook.slug === currentBookSlug && ch === currentChapter;
+                  const isVisited = visitedChapters.includes(ch);
+
                   return (
                     <TouchableOpacity
                       key={ch}
                       onPress={() => handleSelectChapter(ch)}
-                      style={[s.chapterChip, isCurrent && s.chapterChipCurrent]}
+                      style={[
+                        s.chapterChip,
+                        isVisited && !isCurrent && s.chapterChipVisited,
+                        isCurrent && s.chapterChipCurrent,
+                      ]}
                       activeOpacity={0.75}
                       accessibilityRole="button"
-                      accessibilityLabel={`Capítulo ${ch}`}
+                      accessibilityLabel={`Capítulo ${ch}${isVisited ? ' (já lido)' : ''}`}
                     >
+                      {/* Marcador de Fita Dourada (Estilo Fita de Bíblia / Bíblia Vive) */}
+                      {isVisited && !isCurrent && <View style={s.chapterRibbon} />}
                       <Text
                         style={[
                           s.chapterChipText,
+                          isVisited && !isCurrent && s.chapterChipTextVisited,
                           isCurrent && s.chapterChipTextCurrent,
                         ]}
                       >
@@ -412,15 +459,34 @@ function getPickerStyles(colors: ColorTokens, isDark: boolean) {
     borderColor: colors.border.DEFAULT,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  chapterChipVisited: {
+    borderColor: isDark ? 'rgba(217, 180, 99, 0.45)' : 'rgba(196, 151, 59, 0.45)',
+    backgroundColor: isDark ? 'rgba(217, 180, 99, 0.08)' : 'rgba(217, 180, 99, 0.12)',
   },
   chapterChipCurrent: {
     borderColor: colors.amber.DEFAULT,
     backgroundColor: colors.amber.muted,
   },
+  chapterRibbon: {
+    position: 'absolute',
+    top: 0,
+    width: 14,
+    height: 3,
+    backgroundColor: colors.amber.DEFAULT,
+    borderBottomLeftRadius: 2,
+    borderBottomRightRadius: 2,
+  },
   chapterChipText: {
     color: colors.text.secondary,
     fontSize: 15,
     fontWeight: typography.weight.medium,
+  },
+  chapterChipTextVisited: {
+    color: isDark ? colors.text.primary : '#8C6721',
+    fontWeight: typography.weight.semibold,
   },
   chapterChipTextCurrent: {
     color: colors.amber.DEFAULT,
