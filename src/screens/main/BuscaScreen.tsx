@@ -17,13 +17,15 @@ import { Feather } from '@expo/vector-icons';
 import { useTheme, ColorTokens, typography, spacing, radius } from '../../theme';
 import { MemorialCard } from '../../components/memorial/MemorialCard';
 import { NovoRegistroSheet } from '../../components/memorial/NovoRegistroSheet';
-import { MemorialEntry } from '../../lib/types';
+import { MemorialEntry, BibleRef } from '../../lib/types';
 import { fetchUserMemorials, saveUserMemorial } from '../../lib/memorialStore';
 import {
   searchMemorialEntries,
   searchBibleVerses,
   BibleSearchResult,
 } from '../../lib/searchService';
+import { queryScriptureThread } from '../../lib/scriptureThreadService';
+import { ScriptureResultCard, ScripturePassageData } from '../../components/bible/ScriptureResultCard';
 
 type SearchTab = 'marcos' | 'escrituras';
 
@@ -49,13 +51,16 @@ export function BuscaScreen({ navigation }: Props) {
   const [allMemorials, setAllMemorials] = useState<MemorialEntry[]>([]);
   const [memorialResults, setMemorialResults] = useState<MemorialEntry[]>([]);
   const [bibleResults, setBibleResults] = useState<BibleSearchResult[]>([]);
+  const [directPassage, setDirectPassage] = useState<ScripturePassageData | null>(null);
   const [bibleTotal, setBibleTotal] = useState(0);
   const [bibleLoading, setBibleLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Sheet de novo registro a partir de versículo bíblico
+  // Sheet de novo registro a partir de versículo bíblico ou passagem direta
   const [sheetVisible, setSheetVisible] = useState(false);
   const [prefilledVerse, setPrefilledVerse] = useState<BibleSearchResult | null>(null);
+  const [prefilledBibleRef, setPrefilledBibleRef] = useState<BibleRef | null>(null);
+  const [prefilledVerseText, setPrefilledVerseText] = useState<string | undefined>(undefined);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -86,12 +91,13 @@ export function BuscaScreen({ navigation }: Props) {
     setMemorialResults(filtered);
   }, [allMemorials, query, onlyAnswered, selectedTag]);
 
-  // Busca em Escrituras da Bíblia (Worker / FTS com version=acf) com debounce
+  // Busca em Escrituras (Consulta Direta via JEV com Fallback Silencioso FTS)
   useEffect(() => {
     if (activeTab !== 'escrituras' || !query.trim()) {
       if (!query.trim()) {
         setBibleResults([]);
         setBibleTotal(0);
+        setDirectPassage(null);
       }
       return;
     }
@@ -104,10 +110,17 @@ export function BuscaScreen({ navigation }: Props) {
 
     setBibleLoading(true);
     const timer = setTimeout(() => {
-      searchBibleVerses(query, 0, 50, controller.signal)
+      queryScriptureThread(query, { signal: controller.signal })
         .then((res) => {
-          setBibleResults(res.results);
-          setBibleTotal(res.total);
+          if (res.type === 'direct_passage') {
+            setDirectPassage(res.passage);
+            setBibleResults([]);
+            setBibleTotal(1);
+          } else {
+            setDirectPassage(null);
+            setBibleResults(res.results);
+            setBibleTotal(res.total);
+          }
           setBibleLoading(false);
         })
         .catch((err) => {
@@ -124,7 +137,7 @@ export function BuscaScreen({ navigation }: Props) {
   }, [query, activeTab]);
 
   const handleLoadMoreBible = () => {
-    if (loadingMore || bibleResults.length >= bibleTotal || !query.trim()) return;
+    if (loadingMore || bibleResults.length >= bibleTotal || !query.trim() || directPassage) return;
     setLoadingMore(true);
 
     searchBibleVerses(query, bibleResults.length, 30)
@@ -156,6 +169,17 @@ export function BuscaScreen({ navigation }: Props) {
     navigation?.navigate?.('MarcoDetalhe', { entry });
   };
 
+  const handleReadDirectPassage = (bookSlug: string, chapter: number, verse: number) => {
+    navigation?.navigate?.('Main', {
+      screen: 'Biblia',
+      params: {
+        book_slug: bookSlug,
+        chapter,
+        verse,
+      },
+    });
+  };
+
   const handleReadBiblePassage = (verse: BibleSearchResult) => {
     navigation?.navigate?.('Main', {
       screen: 'Biblia',
@@ -169,6 +193,29 @@ export function BuscaScreen({ navigation }: Props) {
 
   const handleCreateMarcoFromVerse = (verse: BibleSearchResult) => {
     setPrefilledVerse(verse);
+    setPrefilledBibleRef({
+      book: verse.bookName,
+      slug: verse.bookSlug,
+      chapter: verse.chapter,
+      verse: verse.verse,
+      display: verse.reference,
+      version: 'ACF',
+    });
+    setPrefilledVerseText(verse.text);
+    setSheetVisible(true);
+  };
+
+  const handleCreateMarcoFromPassage = (passage: ScripturePassageData) => {
+    setPrefilledBibleRef({
+      book: passage.book_name,
+      slug: passage.book_slug,
+      chapter: passage.chapter,
+      verse: passage.start_verse,
+      display: passage.reference,
+      version: 'ACF',
+    });
+    const combinedVerseText = passage.verses.map((v) => `${v.verse}. ${v.text}`).join('\n');
+    setPrefilledVerseText(combinedVerseText);
     setSheetVisible(true);
   };
 
@@ -392,6 +439,20 @@ export function BuscaScreen({ navigation }: Props) {
             <ActivityIndicator color={colors.amber.DEFAULT} size="small" />
             <Text style={s.loadingText}>Pesquisando nas Escrituras…</Text>
           </View>
+        ) : directPassage ? (
+          <ScrollView
+            contentContainerStyle={[
+              s.listContent,
+              { paddingBottom: insets.bottom + 90 },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            <ScriptureResultCard
+              passage={directPassage}
+              onNavigateToPassage={handleReadDirectPassage}
+              onCreateMarco={handleCreateMarcoFromPassage}
+            />
+          </ScrollView>
         ) : bibleResults.length === 0 ? (
           <View style={s.emptyContainer}>
             <View style={s.emptyIconWrap}>
@@ -468,10 +529,17 @@ export function BuscaScreen({ navigation }: Props) {
         )
       )}
 
-      {/* Sheet para criar novo registro se disparado a partir de um versículo encontrado */}
+      {/* Sheet para criar novo registro se disparado a partir de um versículo encontrado ou passagem direta */}
       <NovoRegistroSheet
         visible={sheetVisible}
-        onClose={() => setSheetVisible(false)}
+        onClose={() => {
+          setSheetVisible(false);
+          setPrefilledBibleRef(null);
+          setPrefilledVerseText(undefined);
+          setPrefilledVerse(null);
+        }}
+        initialBibleRef={prefilledBibleRef}
+        initialVerseText={prefilledVerseText}
         onSave={async (entry) => {
           try {
             await saveUserMemorial(entry);
@@ -480,6 +548,9 @@ export function BuscaScreen({ navigation }: Props) {
             console.warn('Erro ao salvar novo registro a partir da busca:', e);
           }
           setSheetVisible(false);
+          setPrefilledBibleRef(null);
+          setPrefilledVerseText(undefined);
+          setPrefilledVerse(null);
           navigation?.navigate?.('LinhaSagrada');
         }}
       />

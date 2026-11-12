@@ -29,8 +29,20 @@ _Avoid_: Botão de pânico, chamado de emergência, SOS, alerta vermelho
 ### Inteligência
 
 **JEV**:
-Tecnologia da TypeSafe. No Memorial é usada exclusivamente para a classificação tipológica das Conexões Bíblicas (`Cumprimento_Profetico`, `Eco_de_Linguagem`, `Contraste_de_Alianca`, `Resposta_de_Oracao`). Não participa do Atalaia.
+Tecnologia da TypeSafe. No Memorial tem dois usos canônicos distintos: (1) classificação tipológica das Conexões Bíblicas (`Cumprimento_Profetico`, `Eco_de_Linguagem`, `Contraste_de_Alianca`, `Resposta_de_Oracao`); (2) identificação estruturada de Passagem-Alvo em uma Consulta de Passagem. Não participa do Atalaia.
 _Avoid_: Usar "JEV" para qualquer análise de estado emocional
+
+**Consulta de Passagem**:
+Uso do JEV para interpretar a intenção de busca bíblica do Leitor (expressa em linguagem natural) e retornar uma `Passagem-Alvo` identificada estruturalmente — sem gerar texto conversacional. Distinto das Conexões Bíblicas, que partem de um Registro já existente.
+_Avoid_: Busca semântica, geração de texto, resposta em linguagem natural, sugestão de passagem
+
+**Passagem-Alvo**:
+Resultado tipado de uma Consulta de Passagem: identificador canônico da passagem bíblica (`book_slug`, `chapter`, faixa de `verses`) com `confidence` validado. Nunca acompanhada de preâmbulo ou texto gerado por IA.
+_Avoid_: Resultado de busca, sugestão, resposta da IA
+
+**Confidence Gate**:
+Verificação obrigatória da métrica `confidence` retornada pelo JEV. Se `confidence >= 0.80`, a Edge Function prossegue para buscar os versículos no banco. Se `confidence < 0.80` ou a escolha for `none`, retorna `status: "unclear"` para o cliente acionar o fallback de busca por palavras-chave.
+_Avoid_: Threshold de qualidade, filtro de confiança, score mínimo
 
 **Triagem de Cuidado**:
 Análise interna, distinta do JEV, que decide se um Registro torna apropriado oferecer ao Leitor a possibilidade de um Sinal de Cuidado. Seu resultado nunca é exibido como diagnóstico.
