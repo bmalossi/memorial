@@ -168,6 +168,9 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       paddingHorizontal: spacing['5'],
       borderWidth: 1,
       borderColor: colors.border.subtle,
+      maxWidth: 560,
+      width: '100%',
+      alignSelf: 'center',
       ...shadows.sheet,
     },
     handle: {
@@ -194,7 +197,7 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
     },
     title: {
       color: colors.text.primary,
-      fontSize: 18,
+      fontSize: typography.size.md,
       fontWeight: typography.weight.bold,
       fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
     },
@@ -243,7 +246,7 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
     },
     badgeText: {
       color: colors.text.secondary,
-      fontSize: 13,
+      fontSize: typography.size.sm,
       fontWeight: typography.weight.bold,
       letterSpacing: 0.5,
     },
@@ -270,7 +273,7 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
     },
     versionDesc: {
       color: colors.text.muted,
-      fontSize: 11,
+      fontSize: typography.size.xs,
       lineHeight: 15,
     },
     radio: {

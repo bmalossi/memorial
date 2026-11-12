@@ -10,7 +10,9 @@ import {
   StatusBar,
   ActivityIndicator,
   ScrollView,
+  Keyboard,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
@@ -61,22 +63,12 @@ export function BuscaScreen({ navigation, route }: Props) {
   const { colors, isDark } = useTheme();
 
   const [query, setQuery] = useState(route?.params?.initialQuery || '');
+  const [executedQuery, setExecutedQuery] = useState(route?.params?.initialQuery || '');
   const [activeTab, setActiveTab] = useState<SearchTab>(
     route?.params?.tab || (route?.params?.initialQuery ? 'escrituras' : 'marcos')
   );
   const [onlyAnswered, setOnlyAnswered] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (route?.params?.initialQuery !== undefined) {
-      setQuery(route.params.initialQuery);
-    }
-    if (route?.params?.tab) {
-      setActiveTab(route.params.tab);
-    } else if (route?.params?.initialQuery) {
-      setActiveTab('escrituras');
-    }
-  }, [route?.params?.initialQuery, route?.params?.tab]);
 
   const s = useMemo(() => getBuscaStyles(colors, isDark), [colors, isDark]);
 
@@ -108,9 +100,74 @@ export function BuscaScreen({ navigation, route }: Props) {
     }, [])
   );
 
-  // Busca em Marcos de Fé (local, rápida)
+  const executeSearch = useCallback((targetQuery?: string, targetTab?: SearchTab) => {
+    const rawQ = targetQuery !== undefined ? targetQuery : query;
+    const q = rawQ.trim();
+    const tab = targetTab || activeTab;
+
+    Keyboard.dismiss();
+    Haptics.selectionAsync();
+    setExecutedQuery(q);
+
+    if (tab === 'marcos') {
+      let effective = q;
+      if (selectedTag) effective = selectedTag;
+      const filtered = searchMemorialEntries(allMemorials, effective, undefined, onlyAnswered);
+      setMemorialResults(filtered);
+      return;
+    }
+
+    if (!q) {
+      setBibleResults([]);
+      setBibleTotal(0);
+      setDirectPassage(null);
+      setBibleLoading(false);
+      return;
+    }
+
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setBibleLoading(true);
+    queryScriptureThread(q, { signal: controller.signal })
+      .then((res) => {
+        if (res.type === 'direct_passage') {
+          setDirectPassage(res.passage);
+          setBibleResults([]);
+          setBibleTotal(1);
+        } else {
+          setDirectPassage(null);
+          setBibleResults(res.results);
+          setBibleTotal(res.total);
+        }
+        setBibleLoading(false);
+      })
+      .catch((err) => {
+        if (err?.name !== 'AbortError') {
+          setBibleLoading(false);
+        }
+      });
+  }, [query, activeTab, selectedTag, allMemorials, onlyAnswered]);
+
   useEffect(() => {
-    let effectiveQuery = query;
+    if (route?.params?.initialQuery !== undefined) {
+      setQuery(route.params.initialQuery);
+      setExecutedQuery(route.params.initialQuery);
+      executeSearch(route.params.initialQuery, route?.params?.tab || (route?.params?.initialQuery ? 'escrituras' : 'marcos'));
+    }
+    if (route?.params?.tab) {
+      setActiveTab(route.params.tab);
+    } else if (route?.params?.initialQuery) {
+      setActiveTab('escrituras');
+    }
+  }, [route?.params?.initialQuery, route?.params?.tab]);
+
+  // Filtros em Marcos de Fé
+  useEffect(() => {
+    let effectiveQuery = executedQuery;
     if (selectedTag) {
       effectiveQuery = selectedTag;
     }
@@ -122,58 +179,34 @@ export function BuscaScreen({ navigation, route }: Props) {
       onlyAnswered
     );
     setMemorialResults(filtered);
-  }, [allMemorials, query, onlyAnswered, selectedTag]);
+  }, [allMemorials, executedQuery, onlyAnswered, selectedTag]);
 
-  // Busca em Escrituras (Consulta Direta via JEV com Fallback Silencioso FTS)
-  useEffect(() => {
-    if (activeTab !== 'escrituras' || !query.trim()) {
-      if (!query.trim()) {
-        setBibleResults([]);
-        setBibleTotal(0);
-        setDirectPassage(null);
-      }
-      return;
-    }
-
+  const handleClearSearch = () => {
+    setQuery('');
+    setExecutedQuery('');
+    setSelectedTag(null);
+    setBibleResults([]);
+    setBibleTotal(0);
+    setDirectPassage(null);
+    setBibleLoading(false);
     if (abortRef.current) {
       abortRef.current.abort();
     }
-    const controller = new AbortController();
-    abortRef.current = controller;
+  };
 
-    setBibleLoading(true);
-    const timer = setTimeout(() => {
-      queryScriptureThread(query, { signal: controller.signal })
-        .then((res) => {
-          if (res.type === 'direct_passage') {
-            setDirectPassage(res.passage);
-            setBibleResults([]);
-            setBibleTotal(1);
-          } else {
-            setDirectPassage(null);
-            setBibleResults(res.results);
-            setBibleTotal(res.total);
-          }
-          setBibleLoading(false);
-        })
-        .catch((err) => {
-          if (err?.name !== 'AbortError') {
-            setBibleLoading(false);
-          }
-        });
-    }, 280);
-
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [query, activeTab]);
+  const handleTabChange = (tab: SearchTab) => {
+    Haptics.selectionAsync();
+    setActiveTab(tab);
+    if (executedQuery.trim()) {
+      executeSearch(executedQuery, tab);
+    }
+  };
 
   const handleLoadMoreBible = () => {
-    if (loadingMore || bibleResults.length >= bibleTotal || !query.trim() || directPassage) return;
+    if (loadingMore || bibleResults.length >= bibleTotal || !executedQuery.trim() || directPassage) return;
     setLoadingMore(true);
 
-    searchBibleVerses(query, bibleResults.length, 30)
+    searchBibleVerses(executedQuery, bibleResults.length, 30)
       .then((res) => {
         setBibleResults((prev) => [...prev, ...res.results]);
         setLoadingMore(false);
@@ -184,24 +217,30 @@ export function BuscaScreen({ navigation, route }: Props) {
   };
 
   const handleSelectTagChip = (tag: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (selectedTag === tag) {
       setSelectedTag(null);
     } else {
       setSelectedTag(tag);
       setQuery('');
+      setExecutedQuery(tag);
       setActiveTab('marcos');
     }
   };
 
   const handleSelectThemeChip = (theme: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setQuery(theme);
     setSelectedTag(null);
+    executeSearch(theme, activeTab);
   };
 
   const handleSelectScriptureExample = (example: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setQuery(example);
     setActiveTab('escrituras');
     setSelectedTag(null);
+    executeSearch(example, 'escrituras');
   };
 
   const handleCardPress = (entry: MemorialEntry) => {
@@ -266,6 +305,8 @@ export function BuscaScreen({ navigation, route }: Props) {
           onPress={() => handleReadBiblePassage(item)}
           style={s.readChapterLink}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Ler capítulo completo de ${item.reference}`}
         >
           <Text style={s.readChapterLinkText}>Ler capítulo</Text>
           <Feather name="arrow-right" size={12} color={colors.amber.DEFAULT} />
@@ -279,6 +320,8 @@ export function BuscaScreen({ navigation, route }: Props) {
           onPress={() => handleCreateMarcoFromVerse(item)}
           style={s.connectToMemorialBtn}
           activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel={`Criar marco com a passagem ${item.reference}`}
         >
           <Feather name="bookmark" size={13} color={colors.amber.DEFAULT} />
           <Text style={s.connectToMemorialBtnText}>Criar marco com esta passagem</Text>
@@ -289,7 +332,11 @@ export function BuscaScreen({ navigation, route }: Props) {
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
-      <StatusBar hidden={true} />
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent
+      />
 
       {/* ── Top Header ── */}
       <View style={s.topHeader}>
@@ -299,7 +346,20 @@ export function BuscaScreen({ navigation, route }: Props) {
       {/* ── Barra de Input de Busca ── */}
       <View style={s.searchBarContainer}>
         <View style={s.searchBox}>
-          <Feather name="search" size={18} color={colors.text.muted} />
+          <TouchableOpacity
+            onPress={() => executeSearch()}
+            style={s.searchIconBtn}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Pesquisar"
+          >
+            <Feather
+              name="search"
+              size={18}
+              color={query.trim().length > 0 ? colors.amber.DEFAULT : colors.text.muted}
+            />
+          </TouchableOpacity>
           <TextInput
             style={s.searchInput}
             placeholder={
@@ -311,19 +371,22 @@ export function BuscaScreen({ navigation, route }: Props) {
             value={query}
             onChangeText={(t) => {
               setQuery(t);
+              if (!t.trim()) {
+                handleClearSearch();
+              }
               if (selectedTag) setSelectedTag(null);
             }}
+            onSubmitEditing={() => executeSearch()}
             selectionColor={colors.amber.DEFAULT}
             autoCorrect={false}
             returnKeyType="search"
           />
           {query.length > 0 && (
             <TouchableOpacity
-              onPress={() => {
-                setQuery('');
-                setSelectedTag(null);
-              }}
+              onPress={handleClearSearch}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Limpar busca"
             >
               <Feather name="x" size={16} color={colors.text.muted} />
             </TouchableOpacity>
@@ -334,27 +397,39 @@ export function BuscaScreen({ navigation, route }: Props) {
       {/* ── Segmented Control (Abas) ── */}
       <View style={s.tabRow}>
         <TouchableOpacity
-          onPress={() => setActiveTab('marcos')}
+          onPress={() => handleTabChange('marcos')}
           style={[s.tabPill, activeTab === 'marcos' && s.tabPillActive]}
           activeOpacity={0.8}
+          accessibilityRole="tab"
+          accessibilityLabel={`Aba Marcos de Fé, ${memorialResults.length} registros`}
+          accessibilityState={{ selected: activeTab === 'marcos' }}
         >
-          <Text style={[s.tabPillText, activeTab === 'marcos' && s.tabPillTextActive]}>
+          <Text
+            maxFontSizeMultiplier={1.3}
+            style={[s.tabPillText, activeTab === 'marcos' && s.tabPillTextActive]}
+          >
             Marcos de Fé ({memorialResults.length})
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() => setActiveTab('escrituras')}
+          onPress={() => handleTabChange('escrituras')}
           style={[s.tabPill, activeTab === 'escrituras' && s.tabPillActive]}
           activeOpacity={0.8}
+          accessibilityRole="tab"
+          accessibilityLabel={`Aba Escrituras, ${bibleTotal > 0 ? `${bibleTotal} passagens encontradas` : 'consulta por intenção'}`}
+          accessibilityState={{ selected: activeTab === 'escrituras' }}
         >
           <View style={s.tabPillContent}>
-            <Text style={[s.tabPillText, activeTab === 'escrituras' && s.tabPillTextActive]}>
+            <Text
+              maxFontSizeMultiplier={1.3}
+              style={[s.tabPillText, activeTab === 'escrituras' && s.tabPillTextActive]}
+            >
               Escrituras {bibleTotal > 0 ? `(${bibleTotal.toLocaleString('pt-BR')})` : ''}
             </Text>
             {activeTab !== 'escrituras' && (
               <View style={s.tabPillBadge}>
-                <Text style={s.tabPillBadgeText}>IA</Text>
+                <Text maxFontSizeMultiplier={1.3} style={s.tabPillBadgeText}>IA</Text>
               </View>
             )}
           </View>
@@ -378,8 +453,12 @@ export function BuscaScreen({ navigation, route }: Props) {
               s.filterChip,
               !onlyAnswered && !selectedTag && s.filterChipActive,
             ]}
+            accessibilityRole="button"
+            accessibilityLabel="Mostrar todos os marcos"
+            accessibilityState={{ selected: !onlyAnswered && !selectedTag }}
           >
             <Text
+              maxFontSizeMultiplier={1.3}
               style={[
                 s.filterChipText,
                 !onlyAnswered && !selectedTag && s.filterChipTextActive,
@@ -392,6 +471,9 @@ export function BuscaScreen({ navigation, route }: Props) {
           <TouchableOpacity
             onPress={() => setOnlyAnswered((v) => !v)}
             style={[s.filterChip, onlyAnswered && s.filterChipActive]}
+            accessibilityRole="button"
+            accessibilityLabel="Filtrar por orações respondidas"
+            accessibilityState={{ selected: onlyAnswered }}
           >
             <Feather
               name="check"
@@ -399,6 +481,7 @@ export function BuscaScreen({ navigation, route }: Props) {
               color={onlyAnswered ? colors.amber.DEFAULT : colors.text.muted}
             />
             <Text
+              maxFontSizeMultiplier={1.3}
               style={[
                 s.filterChipText,
                 onlyAnswered && s.filterChipTextActive,
@@ -415,8 +498,12 @@ export function BuscaScreen({ navigation, route }: Props) {
                 key={tag}
                 onPress={() => handleSelectTagChip(tag)}
                 style={[s.filterChip, isTagActive && s.filterChipActive]}
+                accessibilityRole="button"
+                accessibilityLabel={`Filtrar por ${tag}`}
+                accessibilityState={{ selected: isTagActive }}
               >
                 <Text
+                  maxFontSizeMultiplier={1.3}
                   style={[
                     s.filterChipText,
                     isTagActive && s.filterChipTextActive,
@@ -445,15 +532,18 @@ export function BuscaScreen({ navigation, route }: Props) {
 
             {/* Sugestões de temas */}
             <View style={s.suggestionsBox}>
-              <Text style={s.suggestionsLabel}>SUGESTÕES DE BUSCA</Text>
+              <Text maxFontSizeMultiplier={1.3} style={s.suggestionsLabel}>SUGESTÕES DE BUSCA</Text>
               <View style={s.suggestionChipsWrap}>
                 {QUICK_THEMES.map((theme) => (
                   <TouchableOpacity
                     key={theme}
                     onPress={() => handleSelectThemeChip(theme)}
+                    hitSlop={{ top: 9, bottom: 9, left: 6, right: 6 }}
                     style={s.suggestionChip}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Buscar por tema ${theme}`}
                   >
-                    <Text style={s.suggestionChipText}>{theme}</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={s.suggestionChipText}>{theme}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -468,6 +558,8 @@ export function BuscaScreen({ navigation, route }: Props) {
               { paddingBottom: insets.bottom + 90 },
             ]}
             showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => (
               <View style={s.cardWrapper}>
                 <MemorialCard
@@ -492,6 +584,8 @@ export function BuscaScreen({ navigation, route }: Props) {
               { paddingBottom: insets.bottom + 90 },
             ]}
             showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
           >
             <ScriptureResultCard
               passage={directPassage}
@@ -505,31 +599,34 @@ export function BuscaScreen({ navigation, route }: Props) {
               <Feather name="book-open" size={26} color={colors.text.muted} />
             </View>
             <Text style={s.emptyTitle}>
-              {query.trim()
+              {executedQuery.trim()
                 ? 'Nenhum versículo encontrado'
                 : 'Consulta Bíblica por Intenção'}
             </Text>
             <Text style={s.emptySubtitle}>
-              {query.trim()
-                ? `Nenhuma passagem encontrada para "${query}". Tente reformular a pergunta.`
+              {executedQuery.trim()
+                ? `Nenhuma passagem encontrada para "${executedQuery}". Tente reformular a pergunta.`
                 : 'Digite uma pergunta em linguagem natural ou uma palavra-chave. O Memorial encontra a passagem exata nas Escrituras.'}
             </Text>
 
             {/* Exemplos de consulta por linguagem natural */}
-            {!query.trim() && (
+            {!executedQuery.trim() && (
               <View style={s.suggestionsBox}>
                 <View style={s.suggestionsLabelRow}>
                   <Feather name="zap" size={10} color={colors.amber.DEFAULT} />
-                  <Text style={s.suggestionsLabel}>EXEMPLOS DE CONSULTA</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={s.suggestionsLabel}>EXEMPLOS DE CONSULTA</Text>
                 </View>
                 <View style={s.suggestionChipsWrap}>
                   {SCRIPTURE_QUERY_EXAMPLES.map((example) => (
                     <TouchableOpacity
                       key={example}
                       onPress={() => handleSelectScriptureExample(example)}
+                      hitSlop={{ top: 9, bottom: 9, left: 6, right: 6 }}
                       style={s.suggestionChip}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Exemplo de consulta: ${example}`}
                     >
-                      <Text style={s.suggestionChipText}>{example}</Text>
+                      <Text maxFontSizeMultiplier={1.3} style={s.suggestionChipText}>{example}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -545,6 +642,8 @@ export function BuscaScreen({ navigation, route }: Props) {
               { paddingBottom: insets.bottom + 90 },
             ]}
             showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
             renderItem={renderBibleResultItem}
             ListHeaderComponent={
               bibleTotal > 0 ? (
@@ -562,6 +661,9 @@ export function BuscaScreen({ navigation, route }: Props) {
                   disabled={loadingMore}
                   style={s.loadMoreBtn}
                   activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Carregar mais passagens bíblicas"
+                  accessibilityState={{ busy: loadingMore }}
                 >
                   {loadingMore ? (
                     <ActivityIndicator size="small" color={colors.amber.DEFAULT} />
@@ -596,7 +698,7 @@ export function BuscaScreen({ navigation, route }: Props) {
             await saveUserMemorial(entry);
             await loadMemorials();
           } catch (e) {
-            console.warn('Erro ao salvar novo registro a partir da busca:', e);
+            __DEV__ && console.warn('Erro ao salvar novo registro a partir da busca:', e);
           }
           setSheetVisible(false);
           setPrefilledBibleRef(null);
@@ -619,6 +721,9 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
     paddingHorizontal: spacing['5'],
     paddingTop: spacing['4'],
     paddingBottom: spacing['2'],
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
   },
   wordmark: {
     color: colors.text.muted,
@@ -630,6 +735,9 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
   searchBarContainer: {
     paddingHorizontal: spacing['5'],
     paddingVertical: spacing['2'],
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
   },
   searchBox: {
     flexDirection: 'row',
@@ -641,6 +749,11 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
     paddingHorizontal: spacing['4'],
     height: 48,
     gap: spacing['3'],
+  },
+  searchIconBtn: {
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchInput: {
     flex: 1,
@@ -657,6 +770,9 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
     padding: 3,
     borderWidth: 1,
     borderColor: colors.border.DEFAULT,
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
   },
   tabPill: {
     flex: 1,
@@ -680,6 +796,9 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
     flexGrow: 0,
     flexShrink: 0,
     height: 50,
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
   },
   chipsRow: {
     paddingHorizontal: spacing['5'],
@@ -716,6 +835,9 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
     paddingHorizontal: spacing['5'],
     paddingTop: spacing['3'],
     gap: spacing['3'],
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
   },
   cardWrapper: {
     marginBottom: spacing['2'],
@@ -750,7 +872,7 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
     fontWeight: typography.weight.medium,
   },
   bibleVerseText: {
-    color: isDark ? '#D4CFDA' : colors.text.primary,
+    color: colors.text.primary,
     fontSize: 14,
     lineHeight: 22,
     fontStyle: 'italic',
@@ -791,6 +913,9 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
     paddingHorizontal: spacing['8'],
     paddingTop: spacing['10'],
     gap: spacing['3'],
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
   },
   emptyIconWrap: {
     width: 56,
@@ -866,7 +991,7 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
     paddingVertical: 1,
   },
   tabPillBadgeText: {
-    color: isDark ? '#1A140E' : '#1A140E',
+    color: colors.text.onAmber,
     fontSize: 8,
     fontWeight: typography.weight.bold,
     letterSpacing: 0.5,

@@ -52,7 +52,7 @@ export function GlobalAtalaiaCrisisModal() {
           noteId: crisisData.noteId,
         });
       } catch (err) {
-        console.warn('[GlobalCrisisModal] Erro ao enviar sinal pastoral:', err);
+        __DEV__ && console.warn('[GlobalCrisisModal] Erro ao enviar sinal pastoral:', err);
       }
     }
   };

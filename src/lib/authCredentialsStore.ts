@@ -37,7 +37,7 @@ export async function getSavedCredentials(): Promise<SavedCredentials> {
       password: remember && passVal ? passVal : '',
     };
   } catch (err) {
-    console.warn('[authCredentialsStore] Erro ao recuperar credenciais salvas:', err);
+    __DEV__ && console.warn('[authCredentialsStore] Erro ao recuperar credenciais salvas:', err);
     return {
       remember: false,
       email: '',
@@ -57,7 +57,7 @@ export async function saveCredentials(email: string, password: string): Promise<
       secureStorage.setItem(SAVED_PASSWORD_KEY, password),
     ]);
   } catch (err) {
-    console.warn('[authCredentialsStore] Erro ao salvar credenciais:', err);
+    __DEV__ && console.warn('[authCredentialsStore] Erro ao salvar credenciais:', err);
   }
 }
 
@@ -72,6 +72,6 @@ export async function clearSavedCredentials(): Promise<void> {
       secureStorage.removeItem(SAVED_PASSWORD_KEY),
     ]);
   } catch (err) {
-    console.warn('[authCredentialsStore] Erro ao limpar credenciais salvas:', err);
+    __DEV__ && console.warn('[authCredentialsStore] Erro ao limpar credenciais salvas:', err);
   }
 }

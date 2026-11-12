@@ -86,7 +86,7 @@ export function RootNavigator() {
       initNotificationHandler();
       setupNotificationChannel().catch(() => {});
     } catch (e) {
-      console.log('[RootNavigator] Aviso ao inicializar notificações:', e);
+      __DEV__ && console.log('[RootNavigator] Aviso ao inicializar notificações:', e);
     }
 
     setNotificationNavigationHandler(async (entryId) => {
@@ -97,7 +97,7 @@ export function RootNavigator() {
           navigationRef.navigate('MarcoDetalhe', { entry: found });
         }
       } catch (err) {
-        console.log('[RootNavigator] Erro ao navegar para marco via notificação:', err);
+        __DEV__ && console.log('[RootNavigator] Erro ao navegar para marco via notificação:', err);
       }
     });
 

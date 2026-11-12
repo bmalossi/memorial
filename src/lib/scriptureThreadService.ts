@@ -69,7 +69,7 @@ export async function queryScriptureThread(
       };
     }
   } catch (err) {
-    console.warn('[scriptureThreadService] Falha ao invocar scripture-thread, acionando fallback:', err);
+    __DEV__ && console.warn('[scriptureThreadService] Falha ao invocar scripture-thread, acionando fallback:', err);
   }
 
   // 4. Fallback transparente e silencioso por palavras-chave

@@ -611,7 +611,7 @@ export async function transcribeAudioUri(
         if (r2Err instanceof TranscriptionError) {
           throw r2Err;
         }
-        console.warn('[Memorial Voice] Falha ao enviar para R2 presigned, usando contingência direta:', r2Err);
+        __DEV__ && console.warn('[Memorial Voice] Falha ao enviar para R2 presigned, usando contingência direta:', r2Err);
       }
 
       // Caminho de Contingência: Upload direto ao STT proxy

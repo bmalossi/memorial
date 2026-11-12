@@ -498,6 +498,9 @@ const hdr = StyleSheet.create({
     paddingHorizontal: spacing['4'],
     paddingVertical:   spacing['3'],
     borderBottomWidth: StyleSheet.hairlineWidth,
+    maxWidth:          680,
+    width:             '100%',
+    alignSelf:         'center',
   },
   rightGroup: {
     flexDirection: 'row',
@@ -926,7 +929,11 @@ export function MarcoDetalheScreen({ navigation, route }: Props) {
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
-      <StatusBar hidden={true} />
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent
+      />
 
       <ScreenHeader
         onBack={handleBack}
@@ -1160,6 +1167,9 @@ function getMarcoStyles(colors: ColorTokens, isDark: boolean) {
     paddingHorizontal: spacing['5'],
     paddingTop:        spacing['5'],
     gap:               spacing['4'],
+    maxWidth:          680,
+    width:             '100%',
+    alignSelf:         'center',
   },
 
   // ── Cabeçalho do registro

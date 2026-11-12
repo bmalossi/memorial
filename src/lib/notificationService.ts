@@ -5,6 +5,7 @@ import { isRunningInExpoGo } from 'expo';
 import { supabase } from './supabase';
 import { MemorialEntry } from './types';
 import { fetchUserMemorials } from './memorialStore';
+import { logger } from './logger';
 
 // Suprime alertas e avisos específicos do Expo Go para push remoto no Android
 LogBox.ignoreLogs([
@@ -102,7 +103,7 @@ export async function setupNotificationChannel(): Promise<void> {
         sound: 'default',
       });
     } catch (err: any) {
-      console.log('[NotificationService] Aviso ao configurar canais:', err?.message || err);
+      logger.log('[NotificationService] Aviso ao configurar canais:', err?.message || err);
     }
   }
 }
@@ -170,7 +171,7 @@ export async function registerPushTokenWithSupabase(): Promise<string | null> {
     // No Expo Go no Android (SDK 53+), push tokens remotos (FCM) foram descontinuados pela Expo.
     // Lembretes locais continuam 100% operacionais. Em builds standalone (APK/EAS), o FCM roda nativo.
     if (isRunningInExpoGo() && Platform.OS === 'android') {
-      console.log('[NotificationService] Expo Go (Android) detectado: push remoto requer Development Build. Lembretes locais de fé ativos.');
+      logger.log('[NotificationService] Expo Go (Android) detectado: push remoto requer Development Build. Lembretes locais de fé ativos.');
       await saveNotificationSettings({ pushTokenRegistered: false });
       return null;
     }
@@ -205,15 +206,15 @@ export async function registerPushTokenWithSupabase(): Promise<string | null> {
       .upsert(payload, { onConflict: 'token' });
 
     if (error) {
-      console.log('[NotificationService] Aviso ao registrar token no Supabase:', error.message);
+      logger.log('[NotificationService] Aviso ao registrar token no Supabase:', error.message);
     } else {
-      console.log('[NotificationService] Token push sincronizado com Bíblia Vive com sucesso');
+      logger.log('[NotificationService] Token push sincronizado com Bíblia Vive com sucesso');
     }
 
     await saveNotificationSettings({ pushTokenRegistered: true, lastToken: token });
     return token;
   } catch (err: any) {
-    console.log('[NotificationService] Erro ao obter/sincronizar push token:', err?.message || err);
+    logger.log('[NotificationService] Erro ao obter/sincronizar push token:', err?.message || err);
     return null;
   }
 }
@@ -334,10 +335,10 @@ export async function scheduleDailyMemorialReminder(
       },
     });
 
-    console.log(`[NotificationService] Lembrete diário agendado para ${timeStr} (ID: ${identifier})`);
+    logger.log(`[NotificationService] Lembrete diário agendado para ${timeStr} (ID: ${identifier})`);
     return identifier;
   } catch (err: any) {
-    console.log('[NotificationService] Falha ao agendar lembrete diário:', err?.message || err);
+    logger.log('[NotificationService] Falha ao agendar lembrete diário:', err?.message || err);
     return null;
   }
 }
@@ -348,7 +349,7 @@ export async function scheduleDailyMemorialReminder(
 export async function cancelDailyMemorialReminder(): Promise<void> {
   try {
     await Notifications.cancelScheduledNotificationAsync(NOTIFICATION_IDENTIFIER_DAILY);
-    console.log('[NotificationService] Lembrete diário cancelado.');
+    logger.log('[NotificationService] Lembrete diário cancelado.');
   } catch {}
 }
 
@@ -385,7 +386,7 @@ export async function triggerInstantTestReminder(entries: MemorialEntry[]): Prom
 
     return true;
   } catch (err: any) {
-    console.log('[NotificationService] Erro ao disparar teste:', err?.message || err);
+    logger.log('[NotificationService] Erro ao disparar teste:', err?.message || err);
     return false;
   }
 }
@@ -403,7 +404,7 @@ export async function scheduleAtalaiaCrisisNotification(options: {
   try {
     const hasPerm = await requestNotificationPermission();
     if (!hasPerm) {
-      console.log('[NotificationService] Permissão de notificação não concedida para acolhimento Atalaia.');
+      logger.log('[NotificationService] Permissão de notificação não concedida para acolhimento Atalaia.');
       return null;
     }
 
@@ -439,10 +440,10 @@ export async function scheduleAtalaiaCrisisNotification(options: {
       },
     });
 
-    console.log(`[NotificationService] Notificação de acolhimento Atalaia enviada ao sistema (ID: ${identifier})`);
+    logger.log(`[NotificationService] Notificação de acolhimento Atalaia enviada ao sistema (ID: ${identifier})`);
     return identifier;
   } catch (err: any) {
-    console.log('[NotificationService] Erro ao disparar notificação nativa de acolhimento Atalaia:', err?.message || err);
+    logger.log('[NotificationService] Erro ao disparar notificação nativa de acolhimento Atalaia:', err?.message || err);
     return null;
   }
 }
@@ -467,7 +468,7 @@ export function subscribeToNotificationResponse(): () => void {
           pastorName: data.pastorName,
         });
       } catch (e) {
-        console.log('[NotificationService] Erro ao acionar modal de crise via notificação:', e);
+        logger.log('[NotificationService] Erro ao acionar modal de crise via notificação:', e);
       }
       return;
     }

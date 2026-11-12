@@ -48,7 +48,7 @@ export function extractOAuthTokensFromUrl(url: string): OAuthTokens | null {
       };
     }
   } catch (err) {
-    console.warn('[authOAuthUtils] Erro ao extrair tokens da URL:', err);
+    __DEV__ && console.warn('[authOAuthUtils] Erro ao extrair tokens da URL:', err);
   }
 
   return null;
@@ -68,7 +68,7 @@ export function extractOAuthCodeFromUrl(url: string): string | null {
     const params = new URLSearchParams(queryString);
     return params.get('code');
   } catch (err) {
-    console.warn('[authOAuthUtils] Erro ao extrair code da URL:', err);
+    __DEV__ && console.warn('[authOAuthUtils] Erro ao extrair code da URL:', err);
     return null;
   }
 }

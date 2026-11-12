@@ -43,6 +43,19 @@ export interface ColorTokens {
     testemunho: { label: string };
     jejum: { label: string };
   };
+  danger: {
+    DEFAULT: string;
+    text: string;
+    bg: string;
+    border: string;
+    subtle: string;
+  };
+  successState: {
+    DEFAULT: string;
+    text: string;
+    bg: string;
+    border: string;
+  };
   white: string;
   black: string;
   transparent: string;
@@ -83,6 +96,19 @@ export const darkColors: ColorTokens = {
     oracao:     { label: 'Oração' },
     testemunho: { label: 'Testemunho' },
     jejum:      { label: 'Jejum' },
+  },
+  danger: {
+    DEFAULT: '#D15B5B',
+    text:    '#FCA5A5',
+    bg:      '#2D161A',
+    border:  '#6E2C33',
+    subtle:  '#3D1C1F',
+  },
+  successState: {
+    DEFAULT: '#7ECB98',
+    text:    '#A7F3D0',
+    bg:      '#1A2E22',
+    border:  '#2D5A3E',
   },
   white:       '#FFFFFF',
   black:       '#000000',
@@ -126,6 +152,19 @@ export const lightColors: ColorTokens = {
     testemunho: { label: 'Testemunho' },
     jejum:      { label: 'Jejum' },
   },
+  danger: {
+    DEFAULT: '#C94A4A',
+    text:    '#991B1B',
+    bg:      '#FDE8E8',
+    border:  '#F8B4B4',
+    subtle:  '#FEE2E2',
+  },
+  successState: {
+    DEFAULT: '#2F855A',
+    text:    '#065F46',
+    bg:      '#ECFDF5',
+    border:  '#A7F3D0',
+  },
   white:       '#FFFFFF',
   black:       '#000000',
   transparent: 'transparent',
@@ -141,6 +180,8 @@ export const colors: ColorTokens = {
   amber: { ...darkColors.amber },
   text: { ...darkColors.text },
   category: { ...darkColors.category },
+  danger: { ...darkColors.danger },
+  successState: { ...darkColors.successState },
 };
 
 export function updateStaticColors(target: ColorTokens) {
@@ -151,6 +192,8 @@ export function updateStaticColors(target: ColorTokens) {
     amber: { ...target.amber },
     text: { ...target.text },
     category: { ...target.category },
+    danger: { ...target.danger },
+    successState: { ...target.successState },
   });
 }
 

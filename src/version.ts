@@ -4,5 +4,5 @@
  */
 
 export const APP_VERSION = '1.0.0';
-export const APP_BUILD = 21;
-export const APP_VERSION_LABEL = 'v1.0.0 (Build 21)';
+export const APP_BUILD = 22;
+export const APP_VERSION_LABEL = 'v1.0.0 (Build 22)';

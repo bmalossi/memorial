@@ -45,7 +45,7 @@ export function AtalaiaCrisisModal({
 
   const handleCallCVV = () => {
     Linking.openURL('tel:188').catch((err) => {
-      console.warn('Erro ao discar para o CVV 188:', err);
+      __DEV__ && console.warn('Erro ao discar para o CVV 188:', err);
     });
   };
 
@@ -83,8 +83,8 @@ export function AtalaiaCrisisModal({
           style={[
             s.dialogBox,
             {
-              backgroundColor: isDark ? '#18171D' : '#FFFFFF',
-              borderColor: isDark ? '#3D3428' : '#E8D8C3',
+              backgroundColor: colors.bg.surface,
+              borderColor: colors.border.DEFAULT,
             },
           ]}
         >
@@ -134,8 +134,8 @@ export function AtalaiaCrisisModal({
             style={[
               s.cvvButton,
               {
-                backgroundColor: isDark ? '#2D161A' : '#FDE8E8',
-                borderColor: isDark ? '#6E2C33' : '#F8B4B4',
+                backgroundColor: colors.danger.bg,
+                borderColor: colors.danger.border,
               },
             ]}
             onPress={handleCallCVV}
@@ -143,18 +143,18 @@ export function AtalaiaCrisisModal({
             accessibilityRole="button"
             accessibilityLabel="Ligar gratuitamente para o CVV 188"
           >
-            <View style={[s.cvvIconCircle, { backgroundColor: isDark ? '#4D1B22' : '#FCA5A5' }]}>
-              <Feather name="phone-call" size={18} color={isDark ? '#FCA5A5' : '#991B1B'} />
+            <View style={[s.cvvIconCircle, { backgroundColor: colors.danger.subtle }]}>
+              <Feather name="phone-call" size={18} color={colors.danger.text} />
             </View>
             <View style={s.btnTextWrap}>
-              <Text style={[s.cvvTitle, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>
+              <Text style={[s.cvvTitle, { color: colors.danger.text }]}>
                 Ligar para o Apoio CVV (188)
               </Text>
-              <Text style={[s.cvvSubtitle, { color: isDark ? '#D1A3A8' : '#7F1D1D' }]}>
+              <Text style={[s.cvvSubtitle, { color: colors.danger.DEFAULT }]}>
                 Ligação gratuita · Sigilosa · Atendimento 24 horas
               </Text>
             </View>
-            <Feather name="arrow-up-right" size={16} color={isDark ? '#FCA5A5' : '#991B1B'} />
+            <Feather name="arrow-up-right" size={16} color={colors.danger.text} />
           </TouchableOpacity>
 
           {/* ── BOTÃO 2: Apoio Pastoral (Condicional) ── */}
@@ -163,8 +163,8 @@ export function AtalaiaCrisisModal({
               style={[
                 s.pastoralButton,
                 {
-                  backgroundColor: isDark ? '#211F28' : '#F7F5F0',
-                  borderColor: isDark ? '#3A3644' : '#E5E0D8',
+                  backgroundColor: colors.bg.raised,
+                  borderColor: colors.border.subtle,
                 },
               ]}
               onPress={handleSendPastorSignal}
@@ -207,8 +207,8 @@ export function AtalaiaCrisisModal({
                 style={[
                   s.pastoralButton,
                   {
-                    backgroundColor: isDark ? '#211F28' : '#F7F5F0',
-                    borderColor: isDark ? '#3A3644' : '#E5E0D8',
+                    backgroundColor: colors.bg.raised,
+                    borderColor: colors.border.subtle,
                   },
                 ]}
                 onPress={() => {
@@ -288,7 +288,7 @@ const s = StyleSheet.create({
     paddingTop: 28,
     paddingBottom: 22,
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.5,
     shadowRadius: 24,

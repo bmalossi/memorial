@@ -162,7 +162,7 @@ export function BottomQuickCaptureBar({
               onChangeText(base);
             }
           } catch (err: any) {
-            console.warn('[QuickCapture] Erro ao finalizar ditado local:', err);
+            __DEV__ && console.warn('[QuickCapture] Erro ao finalizar ditado local:', err);
             const title =
               err?.code === 'no_speech_detected'
                 ? 'Nenhuma Fala Detectada'
@@ -203,7 +203,7 @@ export function BottomQuickCaptureBar({
             await onSubmit(updated);
           }
         } catch (err: any) {
-          console.warn('[QuickCapture] Erro ao transcrever:', err);
+          __DEV__ && console.warn('[QuickCapture] Erro ao transcrever:', err);
           onError?.(
             'Transcrição de Áudio',
             err.message || 'Não foi possível transcrever o áudio gravado.'
@@ -302,7 +302,7 @@ export function BottomQuickCaptureBar({
         setIsRecording(false);
         setIsLocalLiveDictation(false);
         setRecordingSeconds(0);
-        console.warn('[QuickCapture] Erro ao gravar voz:', err);
+        __DEV__ && console.warn('[QuickCapture] Erro ao gravar voz:', err);
         if (err.message === 'PERMISSION_DENIED') {
           onError?.(
             'Permissão de Microfone',

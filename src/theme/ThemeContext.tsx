@@ -43,7 +43,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
       })
       .catch((err) => {
-        console.warn('Erro ao carregar tema do Memorial:', err);
+        __DEV__ && console.warn('Erro ao carregar tema do Memorial:', err);
       });
   }, []);
 
@@ -53,7 +53,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       updateStaticColors(mode === 'light' ? lightColors : darkColors);
       await AsyncStorage.setItem(THEME_STORAGE_KEY, mode);
     } catch (err) {
-      console.warn('Erro ao salvar tema do Memorial:', err);
+      __DEV__ && console.warn('Erro ao salvar tema do Memorial:', err);
     }
   }, []);
 

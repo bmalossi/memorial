@@ -1,0 +1,12 @@
+{
+  "memorial-checkpoint-guard": {
+    "enabled": true,
+    "Stop": [
+      {
+        "type": "command",
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/check-unsaved-progress.ps1",
+        "timeout": 15
+      }
+    ]
+  }
+}

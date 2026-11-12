@@ -277,7 +277,7 @@ const s = StyleSheet.create({
   },
   verseText: {
     flex: 1,
-    fontSize: 16,
+    fontSize: typography.size.base,
     lineHeight: 25,
     letterSpacing: 0.1,
   },

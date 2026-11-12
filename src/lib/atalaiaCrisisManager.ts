@@ -16,6 +16,7 @@ import {
 import { fetchCurrentPastoralContact } from './atalaiaStore';
 import { updateMemorialPastoralIntent, setOnMemorialSavedListener } from './memorialStore';
 import { MemorialEntry } from './types';
+import { logger } from './logger';
 
 type NotificationDispatcher = (options: { noteId?: string; pastorName?: string }) => Promise<void>;
 
@@ -26,7 +27,7 @@ let activeNotificationDispatcher: NotificationDispatcher = async (options) => {
       await scheduleAtalaiaCrisisNotification(options);
     }
   } catch (err) {
-    console.log('[AtalaiaCrisisManager] Notificação nativa em background não disponível:', err);
+    logger.log('[AtalaiaCrisisManager] Notificação nativa em background não disponível:', err);
   }
 };
 
@@ -38,7 +39,7 @@ async function dispatchNativeCrisisNotification(options: { noteId?: string; past
   try {
     await activeNotificationDispatcher(options);
   } catch (e) {
-    console.warn('[AtalaiaCrisisManager] Erro ao disparar notificação nativa:', e);
+    logger.warn('[AtalaiaCrisisManager] Erro ao disparar notificação nativa:', e);
   }
 }
 
@@ -89,7 +90,7 @@ export function triggerGlobalAtalaiaCrisis(data: Partial<CrisisModalData>) {
     try {
       listener(currentCrisisState);
     } catch (e) {
-      console.warn('[AtalaiaCrisisManager] Erro no listener de crise:', e);
+      logger.warn('[AtalaiaCrisisManager] Erro no listener de crise:', e);
     }
   });
 }
@@ -103,7 +104,7 @@ export function dismissGlobalAtalaiaCrisis() {
     try {
       listener(currentCrisisState);
     } catch (e) {
-      console.warn('[AtalaiaCrisisManager] Erro ao fechar modal de crise:', e);
+      logger.warn('[AtalaiaCrisisManager] Erro ao fechar modal de crise:', e);
     }
   });
 }
@@ -210,7 +211,7 @@ export async function evaluateAndTriggerAtalaiaCare(entry: {
       }
     })
     .catch((err) => {
-      console.log('[AtalaiaCrisisManager] Classificação assíncrona finalizada com aviso:', err);
+      logger.log('[AtalaiaCrisisManager] Classificação assíncrona finalizada com aviso:', err);
     });
 
   return localClassification;
@@ -220,6 +221,6 @@ export async function evaluateAndTriggerAtalaiaCare(entry: {
 // Garante que qualquer registro salvo em qualquer lugar do aplicativo seja avaliado.
 setOnMemorialSavedListener((savedEntry: MemorialEntry) => {
   evaluateAndTriggerAtalaiaCare(savedEntry).catch((err) => {
-    console.warn('[AtalaiaCrisisManager] Erro na triagem de memória salva:', err);
+    logger.warn('[AtalaiaCrisisManager] Erro na triagem de memória salva:', err);
   });
 });

@@ -296,6 +296,9 @@ function getPickerStyles(colors: ColorTokens, isDark: boolean) {
     borderWidth: 1,
     borderBottomWidth: 0,
     borderColor: colors.border.DEFAULT,
+    maxWidth: 560,
+    width: '100%',
+    alignSelf: 'center',
     maxHeight: SCREEN_HEIGHT * 0.85,
   },
   handle: {
@@ -331,7 +334,7 @@ function getPickerStyles(colors: ColorTokens, isDark: boolean) {
   },
   title: {
     color: colors.text.muted,
-    fontSize: 10,
+    fontSize: typography.size.micro,
     fontWeight: typography.weight.bold,
     letterSpacing: 1.5,
   },
@@ -386,7 +389,7 @@ function getPickerStyles(colors: ColorTokens, isDark: boolean) {
   },
   tabText: {
     color: colors.text.muted,
-    fontSize: 12,
+    fontSize: typography.size.xs,
   },
   tabTextActive: {
     color: colors.amber.DEFAULT,
@@ -424,7 +427,7 @@ function getPickerStyles(colors: ColorTokens, isDark: boolean) {
   },
   bookChaptersCount: {
     color: colors.text.muted,
-    fontSize: 11,
+    fontSize: typography.size.xs,
   },
   chapterContainer: {
     paddingHorizontal: spacing['5'],
@@ -437,12 +440,12 @@ function getPickerStyles(colors: ColorTokens, isDark: boolean) {
   },
   bookSelectedTitle: {
     color: colors.text.primary,
-    fontSize: 20,
+    fontSize: typography.size.lg,
     fontWeight: typography.weight.bold,
   },
   chapterSubtitle: {
     color: colors.text.muted,
-    fontSize: 12,
+    fontSize: typography.size.xs,
   },
   chapterGrid: {
     flexDirection: 'row',
@@ -481,7 +484,7 @@ function getPickerStyles(colors: ColorTokens, isDark: boolean) {
   },
   chapterChipText: {
     color: colors.text.secondary,
-    fontSize: 15,
+    fontSize: typography.size.base,
     fontWeight: typography.weight.medium,
   },
   chapterChipTextVisited: {

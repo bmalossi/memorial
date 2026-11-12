@@ -292,7 +292,14 @@ export function AtalaiaContactModal({
               <Text style={s.headerSubtitle}>Atalaia · Bíblia Vive</Text>
             </View>
           </View>
-          <TouchableOpacity onPress={onClose} style={s.closeBtn} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={onClose}
+            style={s.closeBtn}
+            activeOpacity={0.7}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Fechar janela de contato pastoral"
+          >
             <Feather name="x" size={20} color={colors.text.secondary} />
           </TouchableOpacity>
         </View>
@@ -328,7 +335,7 @@ export function AtalaiaContactModal({
                       {
                         backgroundColor:
                           currentContact.status === 'active'
-                            ? '#7ECB98'
+                            ? colors.successState.DEFAULT
                             : colors.amber.DEFAULT,
                       },
                     ]}
@@ -381,6 +388,10 @@ export function AtalaiaContactModal({
                     disabled={isSendingExplicit}
                     style={s.explicitBtn}
                     activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Solicitar conversa agora com ${currentContact.name}`}
+                    accessibilityHint="Abre diálogo de confirmação para enviar um pedido fraterno de contato"
+                    accessibilityState={{ disabled: isSendingExplicit }}
                   >
                     {isSendingExplicit ? (
                       <ActivityIndicator size="small" color={colors.text.onAmber} />
@@ -402,6 +413,9 @@ export function AtalaiaContactModal({
                     disabled={isSubmitting}
                     style={s.primaryActionBtn}
                     activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Reenviar convite por e-mail ao contato pastoral"
+                    accessibilityState={{ disabled: isSubmitting }}
                   >
                     {isSubmitting ? (
                       <ActivityIndicator size="small" color={colors.text.onAmber} />
@@ -418,6 +432,9 @@ export function AtalaiaContactModal({
                   onPress={() => setIsReplacing(true)}
                   style={s.secondaryActionBtn}
                   activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Substituir contato de cuidado atual"
+                  accessibilityHint="Permite cadastrar outro pastor ou irmão na fé"
                 >
                   <Feather name="refresh-cw" size={15} color={colors.text.primary} />
                   <Text style={s.secondaryActionText}>Substituir Contato</Text>
@@ -427,6 +444,9 @@ export function AtalaiaContactModal({
                   onPress={() => setRevokeConfirmVisible(true)}
                   style={s.dangerActionBtn}
                   activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Revogar cobertura pastoral"
+                  accessibilityHint="Remove o vínculo de cuidado pastoral do Atalaia"
                 >
                   <Feather name="user-x" size={15} color={colors.error} />
                   <Text style={s.dangerActionText}>Revogar Autorização</Text>
@@ -441,7 +461,11 @@ export function AtalaiaContactModal({
               {isReplacing && (
                 <View style={s.replaceHeaderRow}>
                   <Text style={s.formSectionTitle}>Substituir Contato Atual</Text>
-                  <TouchableOpacity onPress={() => setIsReplacing(false)}>
+                  <TouchableOpacity
+                    onPress={() => setIsReplacing(false)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancelar substituição de contato"
+                  >
                     <Text style={s.cancelReplaceText}>Cancelar</Text>
                   </TouchableOpacity>
                 </View>
@@ -495,6 +519,10 @@ export function AtalaiaContactModal({
                 disabled={isSubmitting}
                 style={s.submitBtn}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Enviar convite pastoral"
+                accessibilityHint="Envia um e-mail de convite ao contato indicado"
+                accessibilityState={{ disabled: isSubmitting }}
               >
                 {isSubmitting ? (
                   <ActivityIndicator size="small" color={colors.text.onAmber} />
@@ -520,6 +548,9 @@ export function AtalaiaContactModal({
                 disabled={isLoadingHistory}
                 activeOpacity={0.7}
                 style={s.historyReloadBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Recarregar histórico de sinais"
+                accessibilityState={{ disabled: isLoadingHistory }}
               >
                 {isLoadingHistory ? (
                   <ActivityIndicator size="small" color={colors.amber.DEFAULT} />
@@ -550,9 +581,9 @@ export function AtalaiaContactModal({
                   const isDelivered = formatted.deliveryStatus === 'delivered';
                   const isFailed = formatted.deliveryStatus === 'failed';
                   const statusColor = isDelivered
-                    ? '#7ECB98'
+                    ? colors.successState.DEFAULT
                     : isFailed
-                    ? colors.error
+                    ? colors.danger.DEFAULT
                     : colors.amber.DEFAULT;
                   const isExplicit = formatted.triggerType === 'explicit_help';
 
@@ -598,8 +629,8 @@ export function AtalaiaContactModal({
         <View style={s.modalOverlay}>
           <Pressable style={s.overlayBackdrop} onPress={() => !isRevoking && setRevokeConfirmVisible(false)} />
           <View style={s.subDialogBox}>
-            <View style={[s.subDialogIconBox, { backgroundColor: isDark ? '#3D1C1F' : '#FDE8E8' }]}>
-              <Feather name="user-x" size={24} color={colors.error} />
+            <View style={[s.subDialogIconBox, { backgroundColor: colors.danger.bg }]}>
+              <Feather name="user-x" size={24} color={colors.danger.DEFAULT} />
             </View>
             <Text style={s.subDialogTitle}>Revogar Contato de Cuidado?</Text>
             <Text style={s.subDialogMessage}>
@@ -609,13 +640,13 @@ export function AtalaiaContactModal({
               <TouchableOpacity
                 onPress={handleConfirmRevoke}
                 disabled={isRevoking}
-                style={[s.subDialogBtn, { backgroundColor: colors.error }]}
+                style={[s.subDialogBtn, { backgroundColor: colors.danger.DEFAULT }]}
                 activeOpacity={0.8}
               >
                 {isRevoking ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={colors.white} />
                 ) : (
-                  <Text style={[s.subDialogBtnText, { color: '#FFFFFF' }]}>Revogar Agora</Text>
+                  <Text style={[s.subDialogBtnText, { color: colors.white }]}>Revogar Agora</Text>
                 )}
               </TouchableOpacity>
               <TouchableOpacity
@@ -723,16 +754,17 @@ export function AtalaiaContactModal({
               style={[
                 s.feedbackIconBox,
                 feedbackDialog.icon === 'alert-circle'
-                  ? { backgroundColor: isDark ? '#3D1C1F' : '#FDE8E8' }
-                  : { backgroundColor: isDark ? '#2B261D' : '#F7EBDC' },
+                  ? { backgroundColor: colors.danger.bg }
+                  : { backgroundColor: colors.amber.muted },
               ]}
+              accessibilityRole="image"
             >
               <Feather
                 name={feedbackDialog.icon || 'check'}
                 size={24}
                 color={
                   feedbackDialog.icon === 'alert-circle'
-                    ? colors.error
+                    ? colors.danger.DEFAULT
                     : colors.amber.DEFAULT
                 }
               />
@@ -773,6 +805,9 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       paddingVertical: spacing['3'],
       borderBottomWidth: 1,
       borderBottomColor: colors.border.subtle,
+      maxWidth: 560,
+      width: '100%',
+      alignSelf: 'center',
     },
     headerLeft: {
       flexDirection: 'row',
@@ -783,7 +818,7 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       width: 36,
       height: 36,
       borderRadius: radius.md,
-      backgroundColor: isDark ? '#2B261D' : '#F7EBDC',
+      backgroundColor: colors.amber.muted,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -806,11 +841,14 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
     scrollContent: {
       padding: spacing['4'],
       gap: spacing['4'],
+      maxWidth: 560,
+      width: '100%',
+      alignSelf: 'center',
     },
     governanceCard: {
-      backgroundColor: isDark ? '#18161D' : '#F9F7F2',
+      backgroundColor: colors.bg.surface,
       borderWidth: 1,
-      borderColor: isDark ? 'rgba(231,176,117,0.18)' : 'rgba(180,130,70,0.16)',
+      borderColor: colors.border.subtle,
       borderRadius: radius.md,
       padding: spacing['4'],
     },
@@ -996,14 +1034,14 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-      backgroundColor: '#3E1C1F',
+      backgroundColor: colors.danger.bg,
       borderRadius: radius.sm,
       padding: spacing['2'],
       marginBottom: spacing['1'],
     },
     errorText: {
       fontSize: 12,
-      color: '#FFB4AB',
+      color: colors.danger.text,
       flex: 1,
     },
     fieldHint: {
@@ -1030,10 +1068,10 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
     },
     // Estilos do Pedido Explícito de Ajuda (Ticket 5)
     explicitCard: {
-      backgroundColor: isDark ? '#261F18' : '#FFF9F0',
+      backgroundColor: colors.bg.surface,
       borderRadius: radius.lg,
       borderWidth: 1,
-      borderColor: isDark ? '#4A3B2C' : '#F2DEB9',
+      borderColor: colors.border.DEFAULT,
       padding: spacing['4'],
       gap: spacing['3'],
     },
@@ -1046,7 +1084,7 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       width: 38,
       height: 38,
       borderRadius: radius.md,
-      backgroundColor: isDark ? '#3D2F1F' : '#FCEAD2',
+      backgroundColor: colors.amber.muted,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -1220,7 +1258,7 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       width: 48,
       height: 48,
       borderRadius: radius.full,
-      backgroundColor: isDark ? '#2B261D' : '#F7EBDC',
+      backgroundColor: colors.danger.bg,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -1276,7 +1314,7 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       width: 48,
       height: 48,
       borderRadius: radius.full,
-      backgroundColor: isDark ? '#2B261D' : '#F7EBDC',
+      backgroundColor: colors.amber.muted,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -1298,7 +1336,7 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       lineHeight: 17,
       color: colors.amber.DEFAULT,
       textAlign: 'center',
-      backgroundColor: isDark ? '#231F19' : '#FFF9F0',
+      backgroundColor: colors.amber.muted,
       borderRadius: radius.sm,
       padding: spacing['3'],
     },

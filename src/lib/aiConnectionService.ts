@@ -241,7 +241,7 @@ export async function generateBibleConnections(
       };
     }
   } catch (err: any) {
-    console.warn('[AiService] Erro ao invocar memorial-connections no Supabase:', err?.message || err);
+    __DEV__ && console.warn('[AiService] Erro ao invocar memorial-connections no Supabase:', err?.message || err);
   }
 
   // 3. Fallback somente se for texto real e estruturado (em caso de rede offline)
@@ -274,7 +274,7 @@ export async function attachAiConnectionsToMemorial(
         hasConnections ? result.jevCategory : undefined
       );
     } catch (err) {
-      console.warn('[AiService] Falha ao persistir no Supabase, mantendo no estado local:', err);
+      __DEV__ && console.warn('[AiService] Falha ao persistir no Supabase, mantendo no estado local:', err);
     }
   }
 

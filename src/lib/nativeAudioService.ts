@@ -213,7 +213,7 @@ export async function stopNativeRecording(): Promise<string> {
       stoppedUri = stopResult.url;
     }
   } catch (err: any) {
-    console.warn('[Memorial Voice] Erro ao parar gravador:', err);
+    __DEV__ && console.warn('[Memorial Voice] Erro ao parar gravador:', err);
   }
 
   // Restaura o modo de áudio padrão
@@ -223,7 +223,7 @@ export async function stopNativeRecording(): Promise<string> {
   } catch {}
 
   const uri = stoppedUri || recorder.uri;
-  console.log('[Memorial Voice] Gravação encerrada com URI:', uri);
+  __DEV__ && console.log('[Memorial Voice] Gravação encerrada com URI:', uri);
   if (!uri) {
     throw new Error('O gravador nativo não gerou um arquivo de áudio acessível.');
   }

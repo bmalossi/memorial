@@ -45,7 +45,7 @@ export function PastoralCareActionBanner({
 
   const handleCallCVV = () => {
     Linking.openURL('tel:188').catch((err) => {
-      console.warn('Erro ao discar para o CVV 188:', err);
+      __DEV__ && console.warn('Erro ao discar para o CVV 188:', err);
     });
   };
 

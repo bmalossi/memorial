@@ -484,7 +484,7 @@ export async function loadBibleChapter(
       }
     }
   } catch (e) {
-    console.warn(`[Memorial Bible] Falha ao buscar capítulo online para ${normSlug} (${githubId}) ${chapter} na versão ${version}:`, e);
+    __DEV__ && console.warn(`[Memorial Bible] Falha ao buscar capítulo online para ${normSlug} (${githubId}) ${chapter} na versão ${version}:`, e);
   }
 
   // 5. Fallback se estiver offline: se tivermos versão ACF offline pré-carregada, entregamos com indicação

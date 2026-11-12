@@ -9,7 +9,8 @@ import {
   Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useTheme, ColorTokens, typography, spacing, radius } from '../../theme';
+import { useTheme, ColorTokens, typography, spacing, radius, getThemedShadows } from '../../theme';
+import { useReduceMotion } from '../../hooks';
 import { MemorialEntry } from '../../lib/types';
 import { CATEGORY_CONFIG, relativeDate, truncate } from '../../lib/utils';
 
@@ -22,6 +23,7 @@ interface Props {
 
 export function MemorialCard({ entry, onPress, onAnswer, onEdit }: Props) {
   const { colors, isDark } = useTheme();
+  const reduceMotion = useReduceMotion();
   const cfg = CATEGORY_CONFIG[entry.category];
   const scale = useRef(new Animated.Value(1)).current;
   const answerScale = useRef(new Animated.Value(1)).current;
@@ -33,16 +35,23 @@ export function MemorialCard({ entry, onPress, onAnswer, onEdit }: Props) {
   const s = useMemo(() => getCardStyles(colors, isDark), [colors, isDark]);
 
   const handlePressIn = () => {
+    if (reduceMotion) return;
     Animated.spring(scale, { toValue: 0.985, useNativeDriver: true, tension: 350, friction: 12 }).start();
   };
 
   const handlePressOut = () => {
+    if (reduceMotion) return;
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 350, friction: 12 }).start();
   };
 
   const handleAnswerPress = () => {
     if (!onAnswer || isMarking) return;
     setIsMarking(true);
+    if (reduceMotion) {
+      onAnswer();
+      setIsMarking(false);
+      return;
+    }
     Animated.sequence([
       Animated.timing(answerScale, { toValue: 0.93, duration: 70, useNativeDriver: true }),
       Animated.spring(answerScale, { toValue: 1.03, tension: 280, friction: 8, useNativeDriver: true }),
@@ -68,20 +77,20 @@ export function MemorialCard({ entry, onPress, onAnswer, onEdit }: Props) {
         {/* Topo: Categoria e Data com Ação de Edição */}
         <View style={s.header}>
           <View style={s.categoryRow}>
-            <Text style={s.categoryLabel}>{cfg.tag}</Text>
+            <Text maxFontSizeMultiplier={1.3} style={s.categoryLabel}>{cfg.tag}</Text>
             {isNotebookEntry && (
               <View style={[s.notebookBadge, { backgroundColor: colors.bg.raised, borderColor: colors.border.subtle }]}>
                 <Feather name="book" size={9} color={colors.text.muted} style={{ marginRight: 3 }} />
-                <Text style={[s.notebookBadgeText, { color: colors.text.muted }]}>Caderno</Text>
+                <Text maxFontSizeMultiplier={1.3} style={[s.notebookBadgeText, { color: colors.text.muted }]}>Caderno</Text>
               </View>
             )}
           </View>
           <View style={s.headerRight}>
-            <Text style={s.dateText}>{relativeDate(entry.created_at)}</Text>
+            <Text maxFontSizeMultiplier={1.3} style={s.dateText}>{relativeDate(entry.created_at)}</Text>
             {onEdit && (
               <TouchableOpacity
                 onPress={onEdit}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                 style={s.editBtn}
                 accessibilityRole="button"
                 accessibilityLabel="Editar esta memória"
@@ -94,7 +103,7 @@ export function MemorialCard({ entry, onPress, onAnswer, onEdit }: Props) {
 
         {/* Referência bíblica */}
         {entry.bible_ref && (
-          <Text style={s.bibleRef}>{entry.bible_ref.display}</Text>
+          <Text maxFontSizeMultiplier={1.3} style={s.bibleRef}>{entry.bible_ref.display}</Text>
         )}
 
         {/* Título */}
@@ -155,6 +164,7 @@ export function MemorialCard({ entry, onPress, onAnswer, onEdit }: Props) {
 }
 
 function getCardStyles(colors: ColorTokens, isDark: boolean) {
+  const themedShadows = getThemedShadows(isDark);
   return StyleSheet.create({
     wrapper: { width: '100%' },
 
@@ -165,11 +175,7 @@ function getCardStyles(colors: ColorTokens, isDark: boolean) {
       borderColor:     colors.border.DEFAULT,
       padding:         spacing['5'],
       gap:             spacing['2'],
-      shadowColor:     isDark ? '#000' : '#3A3228',
-      shadowOffset:    { width: 0, height: 2 },
-      shadowOpacity:   isDark ? 0.25 : 0.06,
-      shadowRadius:    6,
-      elevation:       2,
+      ...themedShadows.card,
     },
 
     header: {
@@ -237,7 +243,7 @@ function getCardStyles(colors: ColorTokens, isDark: boolean) {
     },
 
     body: {
-      color:      isDark ? '#C9C4CD' : '#4A453F',
+      color:      colors.text.secondary,
       fontSize:   14,
       lineHeight: 22,
     },

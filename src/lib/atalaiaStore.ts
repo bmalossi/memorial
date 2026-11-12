@@ -8,6 +8,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 import { PastoralIntent } from './types';
+import { logger } from './logger';
 
 function getPlatformOS(): string {
   return 'android';
@@ -72,7 +73,7 @@ export async function fetchCurrentPastoralContact(): Promise<PastoralContact | n
       .maybeSingle();
 
     if (error) {
-      console.warn('[AtalaiaStore] Erro ao buscar contato pastoral:', error.message);
+      logger.warn('[AtalaiaStore] Erro ao buscar contato pastoral:', error.message);
       return validCache;
     }
 
@@ -85,7 +86,7 @@ export async function fetchCurrentPastoralContact(): Promise<PastoralContact | n
 
     return contact;
   } catch (err) {
-    console.warn('[AtalaiaStore] Erro de rede ao buscar contato pastoral:', err);
+    logger.warn('[AtalaiaStore] Erro de rede ao buscar contato pastoral:', err);
     return validCache;
   }
 }
@@ -117,10 +118,10 @@ export async function sendPastoralInvitation(
       return { success: true, contact: data.contact as PastoralContact };
     }
     if (error && error.message && !error.message.includes('Failed to send')) {
-      console.warn('[AtalaiaStore] Edge Function retornou erro:', error.message);
+      logger.warn('[AtalaiaStore] Edge Function retornou erro:', error.message);
     }
   } catch (fnErr) {
-    console.warn('[AtalaiaStore] Edge Function offline ou não deployada, aplicando fallback:', fnErr);
+    logger.warn('[AtalaiaStore] Edge Function offline ou não deployada, aplicando fallback:', fnErr);
   }
 
   // 2. Fallback resiliente direto no Supabase DB
@@ -153,7 +154,7 @@ export async function sendPastoralInvitation(
     .single();
 
   if (error) {
-    console.error('[AtalaiaStore] Falha ao cadastrar contato:', error.message);
+    logger.error('[AtalaiaStore] Falha ao cadastrar contato:', error.message);
     return { success: false, error: 'Não foi possível cadastrar o contato no momento. Tente novamente em instantes.' };
   }
 
@@ -202,7 +203,7 @@ export async function revokePastoralContact(
     .eq('user_id', user.id);
 
   if (error) {
-    console.error('[AtalaiaStore] Falha ao revogar contato:', error.message);
+    logger.error('[AtalaiaStore] Falha ao revogar contato:', error.message);
     return { success: false, error: 'Não foi possível revogar o contato no momento. Tente novamente em instantes.' };
   }
 
@@ -225,7 +226,7 @@ export async function fetchPastoralAlertHistory(): Promise<PastoralAlert[]> {
     .order('sent_at', { ascending: false });
 
   if (error) {
-    console.warn('[AtalaiaStore] Falha ao carregar histórico de alertas:', error.message);
+    logger.warn('[AtalaiaStore] Falha ao carregar histórico de alertas:', error.message);
     return [];
   }
 
@@ -250,11 +251,11 @@ export async function emitBlindCareTelemetry(hasCareContact: boolean): Promise<v
     });
 
     if (error) {
-      console.warn('[AtalaiaStore] Aviso na telemetria cega (silencioso):', error.message);
+      logger.warn('[AtalaiaStore] Aviso na telemetria cega (silencioso):', error.message);
     }
   } catch (err) {
     // Falha em telemetria nunca pode travar o app do usuário
-    console.warn('[AtalaiaStore] Exceção na telemetria cega:', err);
+    logger.warn('[AtalaiaStore] Exceção na telemetria cega:', err);
   }
 }
 
@@ -283,7 +284,7 @@ export async function clearCareBannerDismissal(): Promise<void> {
   try {
     await AsyncStorage.removeItem(CARE_BANNER_DISMISS_KEY);
   } catch (e) {
-    console.warn('[AtalaiaStore] Erro ao limpar dispensa do banner:', e);
+    logger.warn('[AtalaiaStore] Erro ao limpar dispensa do banner:', e);
   }
 }
 
@@ -299,7 +300,7 @@ export async function dismissCareBanner(): Promise<void> {
     }
     await AsyncStorage.setItem(CARE_BANNER_DISMISS_KEY, new Date().toISOString());
   } catch (e) {
-    console.warn('[AtalaiaStore] Erro ao persistir dispensa do banner:', e);
+    logger.warn('[AtalaiaStore] Erro ao persistir dispensa do banner:', e);
   }
 }
 
@@ -346,19 +347,19 @@ export async function evaluateCareTriage(entry: {
     });
 
     if (error) {
-      console.warn('[AtalaiaStore] Erro ao invocar care-triage:', error.message);
+      logger.warn('[AtalaiaStore] Erro ao invocar care-triage:', error.message);
       return false;
     }
 
     const validated = validateTriageResponse(data);
     if (!validated.isValid) {
-      console.warn('[AtalaiaStore] Resposta de triagem rejeitada por violar invariante:', validated.error);
+      logger.warn('[AtalaiaStore] Resposta de triagem rejeitada por violar invariante:', validated.error);
       return false;
     }
 
     return validated.eligible;
   } catch (err) {
-    console.warn('[AtalaiaStore] Falha de rede ao consultar care-triage:', err);
+    logger.warn('[AtalaiaStore] Falha de rede ao consultar care-triage:', err);
     return false;
   }
 }

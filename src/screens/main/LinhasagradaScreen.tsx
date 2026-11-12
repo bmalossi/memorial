@@ -24,6 +24,7 @@ import { NovoRegistroSheet } from '../../components/memorial/NovoRegistroSheet';
 import { BottomQuickCaptureBar } from '../../components/memorial/BottomQuickCaptureBar';
 import { MemorialEntry } from '../../lib/types';
 import { generateAutoTitle } from '../../lib/utils';
+import { logger } from '../../lib/logger';
 import { MemorialCategory, supabase } from '../../lib/supabase';
 import { PastoralCareBanner } from '../../components/memorial/PastoralCareBanner';
 import { PastoralCareActionBanner } from '../../components/memorial/PastoralCareActionBanner';
@@ -387,6 +388,9 @@ const themesBar = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border.DEFAULT,
     gap:               spacing['2'],
+    maxWidth:          680,
+    width:             '100%',
+    alignSelf:         'center',
   },
   label: {
     color:         colors.text.muted,
@@ -603,6 +607,9 @@ const header = StyleSheet.create({
     backgroundColor:   colors.bg.base,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border.DEFAULT,
+    maxWidth:          680,
+    width:             '100%',
+    alignSelf:         'center',
   },
   wordmark: {
     color:         colors.text.primary,
@@ -650,6 +657,9 @@ const header = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border.DEFAULT,
     gap:               spacing['3'],
+    maxWidth:          680,
+    width:             '100%',
+    alignSelf:         'center',
   },
   searchBar: {
     flex:              1,
@@ -712,6 +722,9 @@ const eb = StyleSheet.create({
     justifyContent:   'space-between',
     marginHorizontal: spacing['5'],
     marginBottom:     spacing['4'],
+    maxWidth:          680,
+    width:             '100%',
+    alignSelf:         'center',
   },
   left: { flex: 1, gap: 4 },
   title: {
@@ -861,7 +874,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
         Animated.timing(keyboardHeight, {
           toValue: h,
           duration: e?.duration && e.duration > 50 ? e.duration : 150,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }).start();
       }
     };
@@ -870,7 +883,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
       Animated.timing(keyboardHeight, {
         toValue: 0,
         duration: e?.duration && e.duration > 50 ? e.duration : 150,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }).start();
     };
 
@@ -938,7 +951,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
       const contact = await fetchCurrentPastoralContact();
       setPastoralContact(contact);
     } catch (e) {
-      console.warn('[Linhasagrada] Erro ao carregar contato pastoral:', e);
+      logger.warn('[Linhasagrada] Erro ao carregar contato pastoral:', e);
     } finally {
       setIsPastoralLoaded(true);
     }
@@ -999,7 +1012,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
         setEntries(updated);
       }
     } catch (e) {
-      console.warn('Erro ao sincronizar manualmente:', e);
+      logger.warn('Erro ao sincronizar manualmente:', e);
     }
   };
 
@@ -1061,10 +1074,10 @@ export function LinhasagradaScreen({ navigation }: Props) {
           });
         }
       } catch (careErr) {
-        console.warn('[Linhasagrada] Erro ao avaliar oração respondida:', careErr);
+        logger.warn('[Linhasagrada] Erro ao avaliar oração respondida:', careErr);
       }
     } catch (err) {
-      console.warn('Erro ao marcar oração como respondida:', err);
+      logger.warn('Erro ao marcar oração como respondida:', err);
     }
   };
 
@@ -1103,7 +1116,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
       const updated = await updateUserMemorial(targetId, data);
       setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
     } catch (e) {
-      console.warn('Erro ao atualizar marco:', e);
+      logger.warn('Erro ao atualizar marco:', e);
       setEntries((prev) =>
         prev.map((e) =>
           e.id === targetId
@@ -1139,7 +1152,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
       await handleSaveNewEntry(entryPayload);
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     } catch (err) {
-      console.warn('[Linhasagrada] Erro ao registrar rapidamente:', err);
+      logger.warn('[Linhasagrada] Erro ao registrar rapidamente:', err);
       // Restaura o rascunho em caso de falha de persistência para evitar perda de dados
       setQuickText(trimmed);
     } finally {
@@ -1159,7 +1172,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
           setEntries((prev) => prev.map((e) => (e.id === saved.id ? updated : e)));
         })
         .catch((err) => {
-          console.log('[Memorial] Análise de conexões em background concluída com aviso:', err);
+          logger.log('[Memorial] Análise de conexões em background concluída com aviso:', err);
         });
 
       // Avaliação do Ecossistema Completo de Cuidado Pastoral (4 Pilares)
@@ -1176,12 +1189,12 @@ export function LinhasagradaScreen({ navigation }: Props) {
           tags: saved.tags,
         });
 
-        console.log('[Linhasagrada] Classificação JEV (4 Pilares):', classification);
+        logger.log('[Linhasagrada] Classificação JEV (4 Pilares):', classification);
 
         // Se houver intenção identificada, atualiza no memorialStore (cache local + nuvem)
         if (classification.intent) {
           updateMemorialPastoralIntent(saved.id, classification).catch((err) =>
-            console.log('[Memorial] Erro ao persistir intenção pastoral:', err)
+            logger.log('[Memorial] Erro ao persistir intenção pastoral:', err)
           );
         }
 
@@ -1222,10 +1235,10 @@ export function LinhasagradaScreen({ navigation }: Props) {
           });
         }
       } catch (careErr) {
-        console.warn('[Linhasagrada] Erro na triagem de cuidado pastoral:', careErr);
+        logger.warn('[Linhasagrada] Erro na triagem de cuidado pastoral:', careErr);
       }
     } catch (e) {
-      console.warn('Erro ao salvar no Supabase:', e);
+      logger.warn('Erro ao salvar no Supabase:', e);
       const fallback: MemorialEntry = {
         ...data,
         id: Date.now().toString(),
@@ -1481,7 +1494,11 @@ export function LinhasagradaScreen({ navigation }: Props) {
 
   return (
     <View style={[ls.root, { backgroundColor: colors.bg.base, paddingTop: insets.top }]}>
-      <StatusBar hidden={true} />
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent
+      />
 
       <ScreenHeader
         onAvatarPress={() => navigation?.navigate?.('Perfil')}
@@ -1602,7 +1619,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
         style={[
           ls.bottomDockContainer,
           {
-            bottom: keyboardHeight,
+            transform: [{ translateY: Animated.multiply(keyboardHeight, -1) }],
           },
         ]}
         pointerEvents="box-none"
@@ -1728,12 +1745,17 @@ const ls = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 140,
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
   },
   bottomDockContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    maxWidth: 680,
+    alignSelf: 'center',
     zIndex: 100,
   },
   listHeader: {

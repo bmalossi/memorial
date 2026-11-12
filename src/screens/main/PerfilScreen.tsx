@@ -118,7 +118,7 @@ export function PerfilScreen({ navigation }: Props) {
       const userEntries = await fetchUserMemorials();
       setEntries(userEntries);
     } catch (e) {
-      console.warn('Erro ao carregar dados do perfil:', e);
+      __DEV__ && console.warn('Erro ao carregar dados do perfil:', e);
     }
   };
 
@@ -355,7 +355,7 @@ export function PerfilScreen({ navigation }: Props) {
       setSignOutConfirmVisible(false);
       await supabase.auth.signOut();
     } catch (e) {
-      console.warn('[Perfil] Erro ao deslogar:', e);
+      __DEV__ && console.warn('[Perfil] Erro ao deslogar:', e);
       setSignOutConfirmVisible(false);
     } finally {
       setIsSigningOut(false);
@@ -376,11 +376,15 @@ export function PerfilScreen({ navigation }: Props) {
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
-      <StatusBar hidden={true} />
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent
+      />
 
       {/* Top Header */}
       <View style={s.topHeader}>
-        <Text style={s.wordmark}>JORNADA ESPIRITUAL</Text>
+        <Text maxFontSizeMultiplier={1.3} style={s.wordmark}>JORNADA ESPIRITUAL</Text>
       </View>
 
       <ScrollView
@@ -408,19 +412,19 @@ export function PerfilScreen({ navigation }: Props) {
         <View style={s.statsRow}>
           <View style={s.statBox}>
             <Text style={s.statNumber}>{totalMarcos}</Text>
-            <Text style={s.statLabel}>MARCOS DE FÉ</Text>
+            <Text maxFontSizeMultiplier={1.3} style={s.statLabel}>MARCOS DE FÉ</Text>
           </View>
 
           <View style={[s.statBox, s.statBoxHighlight]}>
             <Text style={[s.statNumber, s.statNumberHighlight]}>
               {oracoesRespondidas}
             </Text>
-            <Text style={s.statLabel}>ORAÇÕES ATENDIDAS</Text>
+            <Text maxFontSizeMultiplier={1.3} style={s.statLabel}>ORAÇÕES ATENDIDAS</Text>
           </View>
 
           <View style={s.statBox}>
             <Text style={s.statNumber}>{livrosUnicos}</Text>
-            <Text style={s.statLabel}>LIVROS BÍBLICOS</Text>
+            <Text maxFontSizeMultiplier={1.3} style={s.statLabel}>LIVROS BÍBLICOS</Text>
           </View>
         </View>
 
@@ -446,6 +450,9 @@ export function PerfilScreen({ navigation }: Props) {
             onPress={handleReviewAnsweredPrayers}
             style={s.altarAction}
             activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Revisar respostas de oração"
+            accessibilityHint="Abre a lista de orações marcadas como respondidas"
           >
             <Text style={s.altarActionText}>Revisar respostas de oração</Text>
             <Feather name="arrow-right" size={13} color={colors.amber.DEFAULT} />
@@ -454,7 +461,7 @@ export function PerfilScreen({ navigation }: Props) {
 
         {/* ── APARÊNCIA & TEMA (Modo Escuro / Modo White Marfim) ── */}
         <View style={s.sectionWrap}>
-          <Text style={s.sectionHeader}>APARÊNCIA & TEMA</Text>
+          <Text maxFontSizeMultiplier={1.3} style={s.sectionHeader}>APARÊNCIA & TEMA</Text>
           <View style={s.themeSelectorRow}>
             {/* Opção Escuro Contemplativo */}
             <TouchableOpacity
@@ -464,6 +471,10 @@ export function PerfilScreen({ navigation }: Props) {
                 s.themeOptionCard,
                 isDark && s.themeOptionCardActive,
               ]}
+              accessibilityRole="radio"
+              accessibilityLabel="Tema Escuro Contemplativo"
+              accessibilityState={{ selected: isDark }}
+              accessibilityHint="Ativa visual solene e escuro para descanso ocular"
             >
               <View style={s.themeOptionHeader}>
                 <View style={[s.themeColorBadge, { backgroundColor: '#18171D', borderColor: isDark ? colors.amber.DEFAULT : '#35323F' }]}>
@@ -491,6 +502,10 @@ export function PerfilScreen({ navigation }: Props) {
                 s.themeOptionCard,
                 !isDark && s.themeOptionCardActive,
               ]}
+              accessibilityRole="radio"
+              accessibilityLabel="Tema Branco Marfim Pergaminho Sagrado"
+              accessibilityState={{ selected: !isDark }}
+              accessibilityHint="Ativa visual claro e acolhedor de pergaminho"
             >
               <View style={s.themeOptionHeader}>
                 <View style={[s.themeColorBadge, { backgroundColor: '#F7F5F0', borderColor: !isDark ? colors.amber.DEFAULT : '#E2DCD0' }]}>
@@ -514,20 +529,23 @@ export function PerfilScreen({ navigation }: Props) {
 
         {/* ── Configurações da Palavra ── */}
         <View style={s.sectionWrap}>
-          <Text style={s.sectionHeader}>CONFIGURAÇÕES DA PALAVRA</Text>
+          <Text maxFontSizeMultiplier={1.3} style={s.sectionHeader}>CONFIGURAÇÕES DA PALAVRA</Text>
 
           <View style={s.groupedCard}>
             <TouchableOpacity
               onPress={handleSelectBibleVersion}
               style={s.rowItem}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Versão da Bíblia: ${versionLabels[bibleVersion]}`}
+              accessibilityHint="Toque para escolher entre ACF, ARC ou NVI"
             >
               <View style={s.rowLabelWrap}>
                 <Feather name="book" size={16} color={colors.text.secondary} />
-                <Text style={s.rowLabel}>Versão da Bíblia</Text>
+                <Text maxFontSizeMultiplier={1.3} style={s.rowLabel}>Versão da Bíblia</Text>
               </View>
               <View style={s.rowRightWrap}>
-                <Text style={s.rowValue}>{versionLabels[bibleVersion]}</Text>
+                <Text maxFontSizeMultiplier={1.3} style={s.rowValue}>{versionLabels[bibleVersion]}</Text>
                 <Feather name="chevron-right" size={16} color={colors.text.muted} />
               </View>
             </TouchableOpacity>
@@ -538,13 +556,16 @@ export function PerfilScreen({ navigation }: Props) {
               onPress={handleSelectFontSize}
               style={s.rowItem}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Tamanho do Texto Sagrado: ${fontSizeLabels[fontSize]}`}
+              accessibilityHint="Toque para alternar o tamanho das letras da Bíblia"
             >
               <View style={s.rowLabelWrap}>
                 <Feather name="type" size={16} color={colors.text.secondary} />
-                <Text style={s.rowLabel}>Tamanho do Texto Sagrado</Text>
+                <Text maxFontSizeMultiplier={1.3} style={s.rowLabel}>Tamanho do Texto Sagrado</Text>
               </View>
               <View style={s.rowRightWrap}>
-                <Text style={s.rowValue}>{fontSizeLabels[fontSize]}</Text>
+                <Text maxFontSizeMultiplier={1.3} style={s.rowValue}>{fontSizeLabels[fontSize]}</Text>
                 <Feather name="chevron-right" size={16} color={colors.text.muted} />
               </View>
             </TouchableOpacity>
@@ -553,7 +574,7 @@ export function PerfilScreen({ navigation }: Props) {
 
         {/* ── Lembretes de Fé & Notificações ── */}
         <View style={s.sectionWrap}>
-          <Text style={s.sectionHeader}>LEMBRETES DE FÉ & NOTIFICAÇÕES</Text>
+          <Text maxFontSizeMultiplier={1.3} style={s.sectionHeader}>LEMBRETES DE FÉ & NOTIFICAÇÕES</Text>
 
           <View style={s.groupedCard}>
             {/* Linha 1: Switch Lembrete Diário */}
@@ -561,7 +582,7 @@ export function PerfilScreen({ navigation }: Props) {
               <View style={s.rowLabelWrap}>
                 <Feather name="bell" size={16} color={notifSettings.enabled ? colors.amber.DEFAULT : colors.text.secondary} />
                 <View style={s.rowTextCol}>
-                  <Text style={s.rowLabel}>Lembrete Diário de Fé</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={s.rowLabel}>Lembrete Diário de Fé</Text>
                   <Text style={s.rowSublabel}>Recordar fidelidade e versículos conectados</Text>
                 </View>
               </View>
@@ -584,16 +605,19 @@ export function PerfilScreen({ navigation }: Props) {
                   onPress={handleSelectNotificationTime}
                   style={s.rowItem}
                   activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Horário da Recordação: ${notifSettings.time}`}
+                  accessibilityHint="Toque para mudar o horário dos lembretes de oração"
                 >
                   <View style={s.rowLabelWrap}>
                     <Feather name="clock" size={16} color={colors.text.secondary} />
                     <View style={s.rowTextCol}>
-                      <Text style={s.rowLabel}>Horário da Recordação</Text>
+                      <Text maxFontSizeMultiplier={1.3} style={s.rowLabel}>Horário da Recordação</Text>
                       <Text style={s.rowSublabel}>Momento de quietude e meditação diária</Text>
                     </View>
                   </View>
                   <View style={s.rowRightWrap}>
-                    <Text style={s.rowValue}>{notifSettings.time}</Text>
+                    <Text maxFontSizeMultiplier={1.3} style={s.rowValue}>{notifSettings.time}</Text>
                     <Feather name="chevron-right" size={16} color={colors.text.muted} />
                   </View>
                 </TouchableOpacity>
@@ -606,6 +630,10 @@ export function PerfilScreen({ navigation }: Props) {
                   style={s.rowItem}
                   activeOpacity={0.7}
                   disabled={isTestingNotif}
+                  accessibilityRole="button"
+                  accessibilityLabel="Testar notificação no aparelho"
+                  accessibilityHint="Dispara uma notificação de teste imediatamente"
+                  accessibilityState={{ disabled: isTestingNotif }}
                 >
                   <View style={s.rowLabelWrap}>
                     <Feather name="send" size={16} color={colors.amber.DEFAULT} />
@@ -630,7 +658,7 @@ export function PerfilScreen({ navigation }: Props) {
               <View style={s.rowLabelWrap}>
                 <Feather name="cloud" size={16} color={colors.text.secondary} />
                 <View style={s.rowTextCol}>
-                  <Text style={s.rowLabel}>Conexão Bíblia Vive</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={s.rowLabel}>Conexão Bíblia Vive</Text>
                   <Text style={s.rowSublabel}>
                     {notifSettings.pushTokenRegistered
                       ? 'Dispositivo conectado para receber reflexões e novidades'
@@ -671,13 +699,16 @@ export function PerfilScreen({ navigation }: Props) {
 
         {/* ── Cuidado Pastoral (Atalaia) ── */}
         <View style={s.sectionWrap}>
-          <Text style={s.sectionHeader}>CUIDADO PASTORAL (ATALAIA)</Text>
+          <Text maxFontSizeMultiplier={1.3} style={s.sectionHeader}>CUIDADO PASTORAL (ATALAIA)</Text>
 
           <View style={s.groupedCard}>
             <TouchableOpacity
               onPress={() => setAtalaiaModalVisible(true)}
               style={s.rowItem}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Cuidado Pastoral Atalaia: ${pastoralContact?.status === 'active' ? 'Ativo' : pastoralContact?.status === 'pending' ? 'Convite enviado' : 'Não configurado'}`}
+              accessibilityHint="Abre o painel de gerenciamento do Atalaia e contato de cuidado"
             >
               <View style={s.rowLabelWrap}>
                 <Feather
@@ -692,7 +723,7 @@ export function PerfilScreen({ navigation }: Props) {
                   }
                 />
                 <View style={s.rowTextCol}>
-                  <Text style={s.rowLabel}>
+                  <Text maxFontSizeMultiplier={1.3} style={s.rowLabel}>
                     {pastoralContact?.status === 'active'
                       ? `Contato: ${pastoralContact.name}`
                       : pastoralContact?.status === 'pending'
@@ -728,7 +759,7 @@ export function PerfilScreen({ navigation }: Props) {
 
         {/* ── Sincronização em Nuvem ── */}
         <View style={s.sectionWrap}>
-          <Text style={s.sectionHeader}>SINCRONIZAÇÃO EM NUVEM</Text>
+          <Text maxFontSizeMultiplier={1.3} style={s.sectionHeader}>SINCRONIZAÇÃO EM NUVEM</Text>
 
           <View style={s.groupedCard}>
             <View style={s.rowItem}>
@@ -739,7 +770,7 @@ export function PerfilScreen({ navigation }: Props) {
                   color={syncInfo.status === 'synced' ? colors.amber.DEFAULT : colors.text.secondary}
                 />
                 <View>
-                  <Text style={s.rowLabel}>Nuvem Bíblia Vive</Text>
+                  <Text maxFontSizeMultiplier={1.3} style={s.rowLabel}>Nuvem Bíblia Vive</Text>
                   <Text style={s.rowSublabel}>
                     {userEmail ? userEmail : 'Armazenamento deste dispositivo'}
                   </Text>
@@ -801,6 +832,10 @@ export function PerfilScreen({ navigation }: Props) {
               disabled={isSyncingManual}
               style={s.rowItem}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Sincronizar memórias com a nuvem agora"
+              accessibilityHint="Salva as memórias locais no servidor e atualiza o estado"
+              accessibilityState={{ disabled: isSyncingManual }}
             >
               <View style={s.rowLabelWrap}>
                 <Feather
@@ -819,13 +854,16 @@ export function PerfilScreen({ navigation }: Props) {
 
         {/* ── Preservação & Exportação ── */}
         <View style={s.sectionWrap}>
-          <Text style={s.sectionHeader}>PRESERVAÇÃO DO MEMORIAL</Text>
+          <Text maxFontSizeMultiplier={1.3} style={s.sectionHeader}>PRESERVAÇÃO DO MEMORIAL</Text>
 
           <View style={s.groupedCard}>
             <TouchableOpacity
               onPress={handleExportJournal}
               style={s.rowItem}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Exportar caderno de memórias"
+              accessibilityHint="Gera e compartilha um arquivo com todos os seus registros"
             >
               <View style={s.rowLabelWrap}>
                 <Feather name="download" size={16} color={colors.amber.DEFAULT} />
@@ -840,6 +878,9 @@ export function PerfilScreen({ navigation }: Props) {
               onPress={handleSignOut}
               style={s.rowItem}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Encerrar sessão"
+              accessibilityHint="Sai da sua conta e retorna à tela inicial"
             >
               <View style={s.rowLabelWrap}>
                 <Feather name="log-out" size={16} color={colors.text.muted} />
@@ -946,6 +987,9 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       paddingHorizontal: spacing['5'],
       paddingTop: spacing['4'],
       paddingBottom: spacing['2'],
+      maxWidth: 560,
+      width: '100%',
+      alignSelf: 'center',
     },
     wordmark: {
       color: colors.text.muted,
@@ -961,6 +1005,9 @@ function getStyles(colors: ColorTokens, isDark: boolean) {
       paddingHorizontal: spacing['5'],
       paddingTop: spacing['4'],
       gap: spacing['5'],
+      maxWidth: 560,
+      width: '100%',
+      alignSelf: 'center',
     },
     profileCard: {
       flexDirection: 'row',

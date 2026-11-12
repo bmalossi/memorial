@@ -568,7 +568,7 @@ export async function searchBibleVerses(
     ) {
       return { results: [], total: 0 };
     }
-    console.warn('[Memorial Search] Falha ao consultar endpoint online, usando busca local:', err?.message || err);
+    __DEV__ && console.warn('[Memorial Search] Falha ao consultar endpoint online, usando busca local:', err?.message || err);
   }
 
   // 2. Fallback offline: busca nos versículos em memória

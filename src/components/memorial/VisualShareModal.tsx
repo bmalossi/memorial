@@ -242,7 +242,7 @@ export function VisualShareModal({ visible, onClose, data }: Props) {
         await Share.share({ message: formattedShareText });
       }
     } catch (err: any) {
-      console.warn('Erro ao compartilhar imagem do card:', err);
+      __DEV__ && console.warn('Erro ao compartilhar imagem do card:', err);
       setConfirmDialog({
         visible: true,
         title: 'Compartilhar Texto',
@@ -608,14 +608,14 @@ function getShareModalStyles(colors: ColorTokens, isDark: boolean) {
   },
   headerTitle: {
     color: colors.text.primary,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.bold,
     letterSpacing: 2,
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
   headerSubtitle: {
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     marginTop: 2,
   },
   closeBtn: {
@@ -698,7 +698,7 @@ function getShareModalStyles(colors: ColorTokens, isDark: boolean) {
   },
   cardTitle: {
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    fontSize: 17,
+    fontSize: typography.size.md,
     fontWeight: typography.weight.bold,
     textAlign: 'center',
     marginBottom: 10,
@@ -721,7 +721,7 @@ function getShareModalStyles(colors: ColorTokens, isDark: boolean) {
     marginBottom: 10,
   },
   bibleRefText: {
-    fontSize: 11,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.bold,
     letterSpacing: 2,
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
@@ -730,7 +730,7 @@ function getShareModalStyles(colors: ColorTokens, isDark: boolean) {
   bibleVerseQuote: {
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
     fontStyle: 'italic',
-    fontSize: 12,
+    fontSize: typography.size.xs,
     lineHeight: 18,
     textAlign: 'center',
     marginTop: 6,
@@ -771,7 +771,7 @@ function getShareModalStyles(colors: ColorTokens, isDark: boolean) {
   },
   toastText: {
     color: colors.amber.DEFAULT,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.medium,
   },
 
@@ -781,7 +781,7 @@ function getShareModalStyles(colors: ColorTokens, isDark: boolean) {
   },
   controlLabel: {
     color: colors.text.muted,
-    fontSize: 10,
+    fontSize: typography.size.micro,
     fontWeight: typography.weight.bold,
     letterSpacing: 1.5,
     marginBottom: 8,
@@ -808,7 +808,7 @@ function getShareModalStyles(colors: ColorTokens, isDark: boolean) {
   },
   pillText: {
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.medium,
   },
   pillTextActive: {
@@ -844,7 +844,7 @@ function getShareModalStyles(colors: ColorTokens, isDark: boolean) {
   },
   secondaryActionText: {
     color: colors.text.primary,
-    fontSize: 13,
+    fontSize: typography.size.sm,
     fontWeight: typography.weight.medium,
   },
   primaryActionBtn: {
@@ -859,7 +859,7 @@ function getShareModalStyles(colors: ColorTokens, isDark: boolean) {
   },
   primaryActionText: {
     color: colors.text.onAmber,
-    fontSize: 14,
+    fontSize: typography.size.base,
     fontWeight: typography.weight.bold,
   },
 });

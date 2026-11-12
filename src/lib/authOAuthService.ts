@@ -33,7 +33,7 @@ export async function handleAuthRedirectUrl(url: string): Promise<OAuthResult> {
   // 1. Verifica se a URL contém erro retornado pelo provedor OAuth
   const oauthError = extractOAuthErrorFromUrl(url);
   if (oauthError) {
-    console.warn('[authOAuthService] Erro retornado no callback OAuth:', oauthError);
+    __DEV__ && console.warn('[authOAuthService] Erro retornado no callback OAuth:', oauthError);
     return {
       success: false,
       type: 'error',
@@ -53,7 +53,7 @@ export async function handleAuthRedirectUrl(url: string): Promise<OAuthResult> {
       });
 
       if (error) {
-        console.warn('[authOAuthService] Erro ao restaurar sessão via setSession:', error.message);
+        __DEV__ && console.warn('[authOAuthService] Erro ao restaurar sessão via setSession:', error.message);
         return { success: false, error: error.message, type: 'error' };
       }
 
@@ -71,7 +71,7 @@ export async function handleAuthRedirectUrl(url: string): Promise<OAuthResult> {
     try {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) {
-        console.warn('[authOAuthService] Erro ao trocar code por sessão:', error.message);
+        __DEV__ && console.warn('[authOAuthService] Erro ao trocar code por sessão:', error.message);
         return { success: false, error: error.message, type: 'error' };
       }
 

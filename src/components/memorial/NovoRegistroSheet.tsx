@@ -412,7 +412,7 @@ export function NovoRegistroSheet({
         }
         setIsLocalModeNotice(true);
       } catch (err: any) {
-        console.warn('Erro ao finalizar ditado local:', err);
+        __DEV__ && console.warn('Erro ao finalizar ditado local:', err);
         setAudioDialog({
           visible: true,
           title:
@@ -455,7 +455,7 @@ export function NovoRegistroSheet({
         );
       }
     } catch (err: any) {
-      console.warn('Erro na transcrição:', err);
+      __DEV__ && console.warn('Erro na transcrição:', err);
       setAudioDialog({
         visible: true,
         title: 'Transcrição de Áudio',
@@ -1128,6 +1128,9 @@ function getSheetStyles(colors: ColorTokens, isDark: boolean) {
     borderWidth: 1,
     borderBottomWidth: 0,
     borderColor: colors.border.DEFAULT,
+    maxWidth: 560,
+    width: '100%',
+    alignSelf: 'center',
     ...themedShadows.sheet,
   },
 

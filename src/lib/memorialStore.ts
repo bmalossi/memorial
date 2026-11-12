@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, MemorialCategory } from './supabase';
 import { MemorialEntry, BibleRef, AiConnection, JevCategory, PastoralIntent, SyncStatus, MOCK_ENTRIES } from './types';
 import { fetchChapterNotebooks } from './chapterNotebookAdapter';
+import { logger } from './logger';
 
 const STORAGE_KEY_ENTRIES = '@memorial_cache_entries_v2';
 const STORAGE_KEY_PENDING = '@memorial_pending_queue_v2';
@@ -309,7 +310,7 @@ export async function fetchUserMemorials(forceSync = false): Promise<MemorialEnt
 
   // Tenta sincronizar silenciosamente com o Supabase
   syncMemorialsWithSupabase().catch((err) => {
-    console.log('[Memorial Sync] Sincronização em background pausada:', err?.message || err);
+    logger.log('[Memorial Sync] Sincronização em background pausada:', err?.message || err);
   });
 
   return activeEntries;
@@ -377,7 +378,7 @@ async function runSyncMemorials(): Promise<{
   try {
     // 2. PUSH: Processa fila de ações pendentes (criadas/editadas offline)
     if (queue.length > 0) {
-      console.log(`[Memorial Sync] Enviando ${queue.length} ações pendentes para o Supabase...`);
+      logger.log(`[Memorial Sync] Enviando ${queue.length} ações pendentes para o Supabase...`);
       const remainingQueue: PendingAction[] = [];
 
       for (const item of queue) {
@@ -489,7 +490,7 @@ async function runSyncMemorials(): Promise<{
               .eq('user_id', user.id);
           }
         } catch (pushErr: any) {
-          console.log('[Memorial Sync] Item pendente em fila local:', item.id, pushErr?.message || pushErr);
+          logger.log('[Memorial Sync] Item pendente em fila local:', item.id, pushErr?.message || pushErr);
           remainingQueue.push(item);
         }
       }
@@ -552,7 +553,7 @@ async function runSyncMemorials(): Promise<{
     return { entries: finalMerged, syncedCount: cloudEntries.length + notebookEntries.length };
 
   } catch (err: any) {
-    console.warn('[Memorial Sync] Falha durante sincronização com Supabase:', err?.message || err);
+    logger.warn('[Memorial Sync] Falha durante sincronização com Supabase:', err?.message || err);
     notifySyncListeners({
       status: 'offline',
       errorMessage: err?.message || 'Falha de conexão com a nuvem.',
@@ -574,7 +575,7 @@ function notifyMemorialSaved(entry: MemorialEntry) {
     try {
       memorialSavedListener(entry);
     } catch (e) {
-      console.warn('[memorialStore] Erro no listener pós-salvamento:', e);
+      logger.warn('[memorialStore] Erro no listener pós-salvamento:', e);
     }
   }
 }
@@ -646,7 +647,7 @@ async function saveUserMemorialUnlocked(
         return cloudEntry;
       }
     } catch (e) {
-      console.log('[Memorial] Falha no envio imediato, mantido na fila offline:', e);
+      logger.log('[Memorial] Falha no envio imediato, mantido na fila offline:', e);
     }
   }
 
@@ -734,7 +735,7 @@ async function updateUserMemorialUnlocked(
         return { ...mergedEntry, sync_status: 'synced' };
       }
     } catch (e) {
-      console.log('[Memorial] Falha no update imediato, mantido na fila offline:', e);
+      logger.log('[Memorial] Falha no update imediato, mantido na fila offline:', e);
     }
   }
 
@@ -886,7 +887,7 @@ export async function updateMemorialAiConnections(
       const queue = await readPendingQueue();
       await writePendingQueue(queue.filter((q) => !(q.id === id && q.action === 'update_ai')));
     } catch (e) {
-      console.warn('[Memorial] Erro ao sincronizar conexões da IA:', e);
+      logger.warn('[Memorial] Erro ao sincronizar conexões da IA:', e);
     }
   }
 }
@@ -971,7 +972,7 @@ export async function updateMemorialPastoralIntent(
         queue.filter((q) => !(q.id === id && q.action === 'update_pastoral_intent'))
       );
     } catch (e) {
-      console.warn('[Memorial] Erro ao sincronizar intenção pastoral:', e);
+      logger.warn('[Memorial] Erro ao sincronizar intenção pastoral:', e);
     }
   }
 }

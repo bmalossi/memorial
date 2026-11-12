@@ -497,7 +497,7 @@ export async function classifyPastoralIntent(
     }
   } catch (err) {
     // Falha silenciosa de conexão: ativa fallback determinístico local
-    console.log('[ClassifierJEV] Fallback local ativado (modo offline):', err);
+    __DEV__ && console.log('[ClassifierJEV] Fallback local ativado (modo offline):', err);
   }
 
   // 3. Fallback determinístico offline

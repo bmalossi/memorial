@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   Platform,
   StatusBar,
@@ -34,6 +35,7 @@ import { saveUserMemorial } from '../../lib/memorialStore';
 import { attachAiConnectionsToMemorial } from '../../lib/aiConnectionService';
 import { VisualShareModal, VisualShareData } from '../../components/memorial/VisualShareModal';
 import { ConfirmModal } from '../../components/ui';
+import * as Haptics from 'expo-haptics';
 
 interface Props {
   navigation?: any;
@@ -54,9 +56,8 @@ export function BibliaScreen({ navigation, route }: Props) {
   const { colors, isDark } = useTheme();
   const s = useMemo(() => getBibliaStyles(colors, isDark), [colors, isDark]);
 
-  // Referência do ScrollView e mapa de posições dos versículos
-  const scrollViewRef = useRef<ScrollView>(null);
-  const versePositionsRef = useRef<Record<number, number>>({});
+  // Referência do FlatList virtualizado
+  const flatListRef = useRef<FlatList>(null);
 
   // Estado do Livro e Capítulo atual
   const [currentBookSlug, setCurrentBookSlug] = useState('sl');
@@ -167,14 +168,18 @@ export function BibliaScreen({ navigation, route }: Props) {
 
   // Scroll automático suave até o versículo quando recebido por parâmetro ou selecionado
   useEffect(() => {
-    if (selectedVerseNum && !loading && chapterData) {
-      const timer = setTimeout(() => {
-        const y = versePositionsRef.current[selectedVerseNum];
-        if (typeof y === 'number' && scrollViewRef.current) {
-          scrollViewRef.current.scrollTo({ y: Math.max(0, y - 80), animated: true });
-        }
-      }, 350);
-      return () => clearTimeout(timer);
+    if (selectedVerseNum && !loading && chapterData?.verses) {
+      const idx = chapterData.verses.findIndex((v) => v.number === selectedVerseNum);
+      if (idx >= 0 && flatListRef.current) {
+        const timer = setTimeout(() => {
+          try {
+            flatListRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.2 });
+          } catch {
+            flatListRef.current?.scrollToOffset({ offset: Math.max(0, idx * 56 - 60), animated: true });
+          }
+        }, 300);
+        return () => clearTimeout(timer);
+      }
     }
   }, [selectedVerseNum, loading, chapterData]);
 
@@ -186,6 +191,7 @@ export function BibliaScreen({ navigation, route }: Props) {
   };
 
   const handleToggleVerse = (num: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedVerseNum((prev) => {
       if (prev === num) {
         setIsSpotlightActive(false);
@@ -240,6 +246,7 @@ export function BibliaScreen({ navigation, route }: Props) {
 
   const handlePrevChapter = () => {
     if (canGoPrev) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setCurrentChapter((c) => c - 1);
       setSelectedVerseNum(null);
       setIsSpotlightActive(false);
@@ -248,6 +255,7 @@ export function BibliaScreen({ navigation, route }: Props) {
 
   const handleNextChapter = () => {
     if (canGoNext) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setCurrentChapter((c) => c + 1);
       setSelectedVerseNum(null);
       setIsSpotlightActive(false);
@@ -282,7 +290,7 @@ export function BibliaScreen({ navigation, route }: Props) {
 
       // Dispara inteligência de conexões bíblicas em background
       attachAiConnectionsToMemorial(saved.id, saved).catch((err) => {
-        console.log('[Memorial] Conexões em background com aviso:', err);
+        __DEV__ && console.log('[Memorial] Conexões em background com aviso:', err);
       });
 
       setRegistroSheetVisible(false);
@@ -292,7 +300,7 @@ export function BibliaScreen({ navigation, route }: Props) {
         displayRef,
       });
     } catch (err: any) {
-      console.warn('Erro ao salvar marco da bíblia:', err);
+      __DEV__ && console.warn('Erro ao salvar marco da bíblia:', err);
       setErrorModal({
         visible: true,
         title: 'Erro ao Salvar Marco',
@@ -303,9 +311,137 @@ export function BibliaScreen({ navigation, route }: Props) {
     }
   };
 
+  const renderVerseItem = useCallback(
+    ({ item: verse }: { item: { number: number; text: string } }) => {
+      const isSelected = selectedVerseNum === verse.number;
+      const hasSelection = selectedVerseNum !== null;
+      const lineHeight = fontSizeLevel === 15 ? 25 : fontSizeLevel === 17 ? 28 : 32;
+
+      return (
+        <TouchableOpacity
+          key={verse.number}
+          onPress={() => handleToggleVerse(verse.number)}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel={`Versículo ${verse.number}: ${verse.text}`}
+          accessibilityState={{ selected: isSelected }}
+          accessibilityHint="Toque para selecionar, compartilhar ou criar marco"
+          style={[
+            s.verseRow,
+            isSelected && s.verseRowSelected,
+            hasSelection && !isSelected && s.verseRowDimmed,
+          ]}
+        >
+          <View style={s.verseNumberWrap}>
+            {isSelected && <Text style={s.verseBullet}>◆</Text>}
+            <Text
+              style={[
+                s.verseNumber,
+                isSelected && s.verseNumberSelected,
+                hasSelection && !isSelected && s.verseDimmedText,
+              ]}
+            >
+              {verse.number}
+            </Text>
+          </View>
+          <Text
+            style={[
+              s.verseContent,
+              {
+                fontSize: fontSizeLevel,
+                lineHeight,
+              },
+              isSelected && s.verseContentSelected,
+              hasSelection && !isSelected && s.verseContentDimmed,
+            ]}
+          >
+            {verse.text}
+          </Text>
+        </TouchableOpacity>
+      );
+    },
+    [selectedVerseNum, fontSizeLevel, s]
+  );
+
+  const renderListHeader = useMemo(() => {
+    if (!chapterData) return null;
+    return (
+      <View style={s.chapterTitleWrap}>
+        <View style={s.chapterHeaderRow}>
+          <Text maxFontSizeMultiplier={1.3} style={s.chapterSuper}>
+            {chapterData.bookName.toUpperCase()} {chapterData.title ? chapterData.chapter : ''}
+          </Text>
+          <TouchableOpacity
+            onPress={() => setVersionModalVisible(true)}
+            hitSlop={{ top: 14, bottom: 14, left: 12, right: 12 }}
+            style={s.versionTag}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Mudar versão da Bíblia"
+          >
+            <Text maxFontSizeMultiplier={1.3} style={s.versionTagText}>{bibleVersion.toUpperCase()}</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={s.chapterTitle}>
+          {chapterData.title || `Capítulo ${chapterData.chapter}`}
+        </Text>
+      </View>
+    );
+  }, [chapterData, bibleVersion, s]);
+
+  const renderListFooter = useMemo(() => {
+    return (
+      <View style={s.chapterNavRow}>
+        <TouchableOpacity
+          onPress={handlePrevChapter}
+          disabled={!canGoPrev}
+          style={[s.navBtn, !canGoPrev && s.navBtnDisabled]}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Ir para capítulo ${currentChapter - 1}`}
+          accessibilityState={{ disabled: !canGoPrev }}
+        >
+          <Feather
+            name="chevron-left"
+            size={18}
+            color={canGoPrev ? colors.text.primary : colors.text.muted}
+          />
+          <Text maxFontSizeMultiplier={1.3} style={[s.navBtnText, !canGoPrev && s.navBtnTextDisabled]}>
+            Cap. {currentChapter - 1}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={s.navDivider} />
+
+        <TouchableOpacity
+          onPress={handleNextChapter}
+          disabled={!canGoNext}
+          style={[s.navBtn, !canGoNext && s.navBtnDisabled]}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Ir para capítulo ${currentChapter + 1}`}
+          accessibilityState={{ disabled: !canGoNext }}
+        >
+          <Text maxFontSizeMultiplier={1.3} style={[s.navBtnText, !canGoNext && s.navBtnTextDisabled]}>
+            Cap. {currentChapter + 1}
+          </Text>
+          <Feather
+            name="chevron-right"
+            size={18}
+            color={canGoNext ? colors.text.primary : colors.text.muted}
+          />
+        </TouchableOpacity>
+      </View>
+    );
+  }, [canGoPrev, canGoNext, currentChapter, colors, s]);
+
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
-      <StatusBar hidden={true} />
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent
+      />
 
       {/* ── Top Header ── */}
       <View style={s.header}>
@@ -324,7 +460,7 @@ export function BibliaScreen({ navigation, route }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Escolher livro e capítulo"
           >
-            <Text style={s.passageText}>
+            <Text maxFontSizeMultiplier={1.3} style={s.passageText}>
               {chapterData?.bookName || currentBookInfo.name} {currentChapter}
             </Text>
             <Feather name="chevron-down" size={16} color={colors.amber.DEFAULT} />
@@ -354,7 +490,7 @@ export function BibliaScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel={`Versão da Bíblia: ${bibleVersion.toUpperCase()}. Toque para escolher entre ACF, ARC e NVI`}
             >
-              <Text style={s.versionButtonText}>{bibleVersion.toUpperCase()}</Text>
+              <Text maxFontSizeMultiplier={1.3} style={s.versionButtonText}>{bibleVersion.toUpperCase()}</Text>
             </TouchableOpacity>
           </Animated.View>
 
@@ -367,7 +503,7 @@ export function BibliaScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Alternar tamanho da letra"
             >
-              <Text style={s.fontSizeIconText}>AA</Text>
+              <Text maxFontSizeMultiplier={1.3} style={s.fontSizeIconText}>AA</Text>
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -380,142 +516,33 @@ export function BibliaScreen({ navigation, route }: Props) {
           <Text style={s.loadingText}>Carregando Escrituras…</Text>
         </View>
       ) : (
-        <ScrollView
-          ref={scrollViewRef}
+        <FlatList
+          ref={flatListRef}
+          data={chapterData?.verses || []}
+          keyExtractor={(item) => item.number.toString()}
+          renderItem={renderVerseItem}
+          ItemSeparatorComponent={() => <View style={s.verseSeparator} />}
+          ListHeaderComponent={renderListHeader}
+          ListFooterComponent={renderListFooter}
           style={s.scroll}
           contentContainerStyle={[
             s.scrollContent,
             { paddingBottom: insets.bottom + 110 },
           ]}
           showsVerticalScrollIndicator={false}
-        >
-          {/* Título editorial do capítulo se disponível */}
-          {chapterData?.title ? (
-            <View style={s.chapterTitleWrap}>
-              <View style={s.chapterHeaderRow}>
-                <Text style={s.chapterSuper}>
-                  {chapterData.bookName.toUpperCase()} {chapterData.chapter}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setVersionModalVisible(true)}
-                  style={s.versionTag}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel="Mudar versão da Bíblia"
-                >
-                  <Text style={s.versionTagText}>{bibleVersion.toUpperCase()}</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={s.chapterTitle}>{chapterData.title}</Text>
-            </View>
-          ) : (
-            <View style={s.chapterTitleWrap}>
-              <View style={s.chapterHeaderRow}>
-                <Text style={s.chapterSuper}>
-                  {chapterData?.bookName.toUpperCase()}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setVersionModalVisible(true)}
-                  style={s.versionTag}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel="Mudar versão da Bíblia"
-                >
-                  <Text style={s.versionTagText}>{bibleVersion.toUpperCase()}</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={s.chapterTitle}>Capítulo {chapterData?.chapter}</Text>
-            </View>
-          )}
-
-          {/* Versículos */}
-          <View style={s.versesContainer}>
-            {chapterData?.verses.map((verse) => {
-              const isSelected = selectedVerseNum === verse.number;
-              const hasSelection = selectedVerseNum !== null;
-              const lineHeight = fontSizeLevel === 15 ? 25 : fontSizeLevel === 17 ? 28 : 32;
-
-              return (
-                <TouchableOpacity
-                  key={verse.number}
-                  onLayout={(event) => {
-                    versePositionsRef.current[verse.number] = event.nativeEvent.layout.y;
-                  }}
-                  onPress={() => handleToggleVerse(verse.number)}
-                  activeOpacity={0.75}
-                  style={[
-                    s.verseRow,
-                    isSelected && s.verseRowSelected,
-                    hasSelection && !isSelected && s.verseRowDimmed,
-                  ]}
-                >
-                  <View style={s.verseNumberWrap}>
-                    {isSelected && <Text style={s.verseBullet}>◆</Text>}
-                    <Text
-                      style={[
-                        s.verseNumber,
-                        isSelected && s.verseNumberSelected,
-                        hasSelection && !isSelected && s.verseDimmedText,
-                      ]}
-                    >
-                      {verse.number}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[
-                      s.verseContent,
-                      {
-                        fontSize: fontSizeLevel,
-                        lineHeight,
-                      },
-                      isSelected && s.verseContentSelected,
-                      hasSelection && !isSelected && s.verseContentDimmed,
-                    ]}
-                  >
-                    {verse.text}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* ── Navegação de Capítulos no rodapé ── */}
-          <View style={s.chapterNavRow}>
-            <TouchableOpacity
-              onPress={handlePrevChapter}
-              disabled={!canGoPrev}
-              style={[s.navBtn, !canGoPrev && s.navBtnDisabled]}
-              activeOpacity={0.7}
-            >
-              <Feather
-                name="chevron-left"
-                size={18}
-                color={canGoPrev ? colors.text.primary : colors.text.muted}
-              />
-              <Text style={[s.navBtnText, !canGoPrev && s.navBtnTextDisabled]}>
-                Cap. {currentChapter - 1}
-              </Text>
-            </TouchableOpacity>
-
-            <View style={s.navDivider} />
-
-            <TouchableOpacity
-              onPress={handleNextChapter}
-              disabled={!canGoNext}
-              style={[s.navBtn, !canGoNext && s.navBtnDisabled]}
-              activeOpacity={0.7}
-            >
-              <Text style={[s.navBtnText, !canGoNext && s.navBtnTextDisabled]}>
-                Cap. {currentChapter + 1}
-              </Text>
-              <Feather
-                name="chevron-right"
-                size={18}
-                color={canGoNext ? colors.text.primary : colors.text.muted}
-              />
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+          initialNumToRender={20}
+          maxToRenderPerBatch={25}
+          windowSize={11}
+          removeClippedSubviews={Platform.OS === 'android'}
+          onScrollToIndexFailed={(info) => {
+            setTimeout(() => {
+              flatListRef.current?.scrollToOffset({
+                offset: Math.max(0, info.index * 56 - 60),
+                animated: true,
+              });
+            }, 100);
+          }}
+        />
       )}
 
       {/* ── Barra de Ação Flutuante do Versículo Selecionado ── */}
@@ -695,6 +722,9 @@ function getBibliaStyles(colors: ColorTokens, isDark: boolean) {
     backgroundColor: colors.bg.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border.DEFAULT,
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
   },
   passagePill: {
     flexDirection: 'row',
@@ -731,7 +761,7 @@ function getBibliaStyles(colors: ColorTokens, isDark: boolean) {
   },
   versionButtonText: {
     color: colors.amber.DEFAULT,
-    fontSize: 11,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.bold,
     letterSpacing: 0.5,
   },
@@ -747,7 +777,7 @@ function getBibliaStyles(colors: ColorTokens, isDark: boolean) {
   },
   fontSizeIconText: {
     color: colors.text.secondary,
-    fontSize: 13,
+    fontSize: typography.size.sm,
     fontWeight: typography.weight.bold,
   },
   loadingContainer: {
@@ -767,6 +797,9 @@ function getBibliaStyles(colors: ColorTokens, isDark: boolean) {
   scrollContent: {
     paddingHorizontal: spacing['6'],
     paddingTop: spacing['6'],
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
   },
   chapterTitleWrap: {
     gap: 4,
@@ -790,25 +823,28 @@ function getBibliaStyles(colors: ColorTokens, isDark: boolean) {
   },
   versionTagText: {
     color: colors.amber.DEFAULT,
-    fontSize: 10,
+    fontSize: typography.size.micro,
     fontWeight: typography.weight.bold,
     letterSpacing: 0.8,
   },
   chapterSuper: {
     color: colors.amber.DEFAULT,
-    fontSize: 10,
+    fontSize: typography.size.micro,
     fontWeight: typography.weight.bold,
     letterSpacing: 2,
   },
   chapterTitle: {
     color: colors.text.primary,
-    fontSize: 22,
+    fontSize: typography.size.xl,
     fontWeight: typography.weight.bold,
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
     lineHeight: 30,
   },
   versesContainer: {
     gap: 12,
+  },
+  verseSeparator: {
+    height: 12,
   },
   verseRow: {
     flexDirection: 'row',
@@ -838,7 +874,7 @@ function getBibliaStyles(colors: ColorTokens, isDark: boolean) {
   },
   verseNumber: {
     color: colors.text.muted,
-    fontSize: 11,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.semibold,
     textAlign: 'right',
   },
@@ -902,6 +938,8 @@ function getBibliaStyles(colors: ColorTokens, isDark: boolean) {
     position: 'absolute',
     left: spacing['3'],
     right: spacing['3'],
+    maxWidth: 680,
+    alignSelf: 'center',
     backgroundColor: colors.bg.surface,
     borderRadius: radius.md,
     borderWidth: 1,
@@ -925,7 +963,7 @@ function getBibliaStyles(colors: ColorTokens, isDark: boolean) {
   },
   floatingSub: {
     color: colors.text.muted,
-    fontSize: 11,
+    fontSize: typography.size.xs,
   },
   floatingActions: {
     flexDirection: 'row',
@@ -945,7 +983,7 @@ function getBibliaStyles(colors: ColorTokens, isDark: boolean) {
   },
   returnMarcoBtnText: {
     color: colors.amber.DEFAULT,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.medium,
   },
   floatingIconBtn: {
@@ -970,7 +1008,7 @@ function getBibliaStyles(colors: ColorTokens, isDark: boolean) {
   },
   createMarcoBtnText: {
     color: colors.text.onAmber,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.bold,
   },
   dismissBtn: {
