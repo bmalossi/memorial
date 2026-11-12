@@ -401,6 +401,66 @@ export interface BibleSearchResponseData {
 }
 
 /**
+ * Stop-words portuguesas para extração de palavras-chave bíblicas
+ * de perguntas em linguagem natural. Permite que o FTS5 encontre
+ * conteúdo bíblico mesmo quando a query é uma pergunta completa.
+ */
+const PORTUGUESE_STOP_WORDS = new Set([
+  // Interrogativos
+  'onde', 'aonde', 'qual', 'quais', 'quem', 'como', 'quando', 'porque', 'quanto', 'quantos', 'quanta', 'quantas',
+  // Verbos de busca bíblica (meta-palavras)
+  'fala', 'falam', 'falando', 'falou', 'diz', 'dizem', 'dizendo', 'disse',
+  'esta', 'esta', 'estao', 'estava', 'estavam', 'fica', 'ficam',
+  'mostra', 'mostram', 'mostrou', 'relata', 'relatam', 'conta', 'contam',
+  'ensina', 'ensinam', 'explica', 'explicam', 'encontra', 'acha',
+  'ha', 'haver', 'tem', 'tinha', 'tinham', 'ser', 'estar', 'foi', 'foram',
+  // Referências ao texto sagrado (meta-palavras)
+  'passagem', 'passagens', 'versiculo', 'versículo', 'versiculos', 'versículos',
+  'capitulo', 'capítulo', 'capitulos', 'capítulos', 'livro', 'livros',
+  'biblia', 'bíblia', 'escritura', 'escrituras', 'texto', 'textos', 'parte', 'lugar', 'trecho',
+  // Artigos e preposições
+  'o', 'a', 'os', 'as', 'um', 'uma', 'uns', 'umas',
+  'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas',
+  'por', 'para', 'pra', 'pro', 'com', 'sem', 'sob', 'sobre',
+  'ao', 'aos', 'pelo', 'pela', 'pelos', 'pelas',
+  // Conjunções e pronomes comuns
+  'se', 'ou', 'mas', 'e', 'que', 'me', 'te', 'lhe', 'lhes',
+  'ele', 'ela', 'eles', 'elas',
+  'este', 'estes', 'essa', 'esse', 'esses', 'essas',
+  'aquele', 'aquela', 'aqueles', 'aquelas', 'isto', 'isso', 'aquilo',
+  'meu', 'minha', 'meus', 'minhas', 'seu', 'sua', 'seus', 'suas',
+]);
+
+/**
+ * Detecta se a query é uma pergunta em linguagem natural e extrai
+ * apenas as palavras-chave de conteúdo bíblico (sem stop-words).
+ * Retorna a query original se for uma busca simples já formulada.
+ */
+function extractBibleKeywords(query: string): string | null {
+  const trimmed = query.trim();
+
+  // Já tem aspas: usar como literal sem modificar
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) return null;
+
+  // Detecta padrão de pergunta: começa com interrogativo ou tem 5+ palavras
+  const lower = trimmed.toLowerCase();
+  const isQuestion =
+    /^(onde|qual|quais|quem|como|quando|porque|por que|o que|em que|de que)\b/i.test(lower) ||
+    lower.includes('?');
+
+  if (!isQuestion) return null;
+
+  // Remove pontuação e extrai palavras-chave descartando stop-words
+  const cleaned = lower.replace(/[?!.,;:¿¡()"']/g, ' ');
+  const words = cleaned.split(/\s+/).filter(w => w.length > 2 && !PORTUGUESE_STOP_WORDS.has(w));
+
+  // Precisa de pelo menos 1 palavra-chave
+  if (words.length === 0) return null;
+
+  return words.join(' ');
+}
+
+/**
  * Busca nas Escrituras (Bíblia Vive API / Worker com busca exata, paginação e fallback local)
  */
 export async function searchBibleVerses(
@@ -414,12 +474,14 @@ export async function searchBibleVerses(
 
   const normQuery = normalizeSearchString(trimmed);
 
-  // Se a query não contiver aspas e for uma palavra ou frase,
-  // envolvemos entre aspas para que o FTS5 da Cloudflare busque
-  // a palavra EXATA (ex: "fé") em vez do curinga prefixo ("fe"* que traz feriu, festa, etc.)
-  const formattedQuery = trimmed.startsWith('"') && trimmed.endsWith('"')
-    ? trimmed
-    : `"${trimmed}"`;
+  // Se a query for uma pergunta em linguagem natural, extrai palavras-chave.
+  // Caso contrário, usa aspas para busca literal exata no FTS5.
+  const keywords = extractBibleKeywords(trimmed);
+  const formattedQuery = keywords ?? (
+    trimmed.startsWith('"') && trimmed.endsWith('"')
+      ? trimmed
+      : `"${trimmed}"`
+  );
 
   // 1. Tenta consultar a API de busca da Bíblia Vive na borda (Cloudflare Worker FTS5 com v=acf para a versão oficial)
   try {

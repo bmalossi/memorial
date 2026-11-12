@@ -39,9 +39,28 @@ jobs:
       - name: Checagem Estrita de Tipos (TypeScript)
         run: npx tsc --noEmit
 
-  deploy:
-    name: 2. Publicação OTA ou Compilação de APK
+  deploy-edge-functions:
+    name: 2. Deploy Edge Functions (Supabase)
     needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy scripture-thread Edge Function
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase functions deploy scripture-thread --no-verify-jwt --remote=yqnsaslvxmqaeeccmcmg --yes
+
+  deploy:
+    name: 3. Publicação OTA ou Compilação de APK
+    needs: [validate, deploy-edge-functions]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do Repositório
