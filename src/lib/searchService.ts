@@ -407,46 +407,58 @@ export interface BibleSearchResponseData {
  */
 const PORTUGUESE_STOP_WORDS = new Set([
   // Interrogativos
-  'onde', 'aonde', 'qual', 'quais', 'quem', 'como', 'quando', 'porque', 'quanto', 'quantos', 'quanta', 'quantas',
+  'onde', 'aonde', 'qual', 'quais', 'quem', 'como', 'quando', 'porque', 'por que', 'quanto', 'quantos', 'quanta', 'quantas', 'que',
   // Verbos de busca bíblica (meta-palavras)
-  'fala', 'falam', 'falando', 'falou', 'diz', 'dizem', 'dizendo', 'disse',
-  'esta', 'esta', 'estao', 'estava', 'estavam', 'fica', 'ficam',
-  'mostra', 'mostram', 'mostrou', 'relata', 'relatam', 'conta', 'contam',
-  'ensina', 'ensinam', 'explica', 'explicam', 'encontra', 'acha',
-  'ha', 'haver', 'tem', 'tinha', 'tinham', 'ser', 'estar', 'foi', 'foram',
+  'fala', 'falam', 'falando', 'falou', 'falar',
+  'diz', 'dizem', 'dizendo', 'disse', 'dizer',
+  'esta', 'está', 'estao', 'estão', 'estava', 'estavam',
+  'fica', 'ficam', 'mostra', 'mostram', 'mostrou',
+  'relata', 'relatam', 'conta', 'contam',
+  'ensina', 'ensinam', 'explica', 'explicam',
+  'encontra', 'encontrar', 'acha', 'achar',
+  'saber', 'ha', 'há', 'haver', 'tem', 'têm', 'tinha', 'tinham', 'ser', 'estar', 'foi', 'foram',
   // Referências ao texto sagrado (meta-palavras)
   'passagem', 'passagens', 'versiculo', 'versículo', 'versiculos', 'versículos',
-  'capitulo', 'capítulo', 'capitulos', 'capítulos', 'livro', 'livros',
-  'biblia', 'bíblia', 'escritura', 'escrituras', 'texto', 'textos', 'parte', 'lugar', 'trecho',
+  'capitulo', 'capítulo', 'capitulos', 'capítulos',
+  'livro', 'livros', 'biblia', 'bíblia', 'escritura', 'escrituras',
+  'texto', 'textos', 'parte', 'lugar', 'trecho',
+  // Qualificadores temporais e contextuais conversacionais
+  'fim', 'tempos', 'tempo', 'dias', 'dia', 'mundo', 'terra',
+  'velho', 'antigo', 'novo', 'testamento',
   // Artigos e preposições
   'o', 'a', 'os', 'as', 'um', 'uma', 'uns', 'umas',
   'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas',
-  'por', 'para', 'pra', 'pro', 'com', 'sem', 'sob', 'sobre',
-  'ao', 'aos', 'pelo', 'pela', 'pelos', 'pelas',
+  'por', 'para', 'pra', 'pro', 'com', 'sem', 'sob', 'sobre', 'acerca', 'respeito',
+  'ao', 'aos', 'pelo', 'pela', 'pelos', 'pelas', 'segundo', 'conforme',
   // Conjunções e pronomes comuns
-  'se', 'ou', 'mas', 'e', 'que', 'me', 'te', 'lhe', 'lhes',
+  'se', 'ou', 'mas', 'e', 'me', 'te', 'lhe', 'lhes', 'nos', 'vos',
   'ele', 'ela', 'eles', 'elas',
-  'este', 'estes', 'essa', 'esse', 'esses', 'essas',
+  'este', 'esta', 'estes', 'estas', 'essa', 'esse', 'esses', 'essas',
   'aquele', 'aquela', 'aqueles', 'aquelas', 'isto', 'isso', 'aquilo',
+  'tudo', 'todo', 'toda', 'todos', 'todas',
+  'algo', 'algum', 'alguma', 'alguns', 'algumas',
+  'outro', 'outra', 'outros', 'outras',
+  'muito', 'muita', 'muitos', 'muitas',
   'meu', 'minha', 'meus', 'minhas', 'seu', 'sua', 'seus', 'suas',
 ]);
 
 /**
  * Detecta se a query é uma pergunta em linguagem natural e extrai
  * apenas as palavras-chave de conteúdo bíblico (sem stop-words).
- * Retorna a query original se for uma busca simples já formulada.
+ * Retorna array de palavras-chave ou null se for uma busca direta formulada.
  */
-function extractBibleKeywords(query: string): string | null {
+function extractBibleKeywords(query: string): string[] | null {
   const trimmed = query.trim();
 
   // Já tem aspas: usar como literal sem modificar
   if (trimmed.startsWith('"') && trimmed.endsWith('"')) return null;
 
-  // Detecta padrão de pergunta: começa com interrogativo ou tem 5+ palavras
+  // Detecta padrão de pergunta ou frase descritiva (começa com interrogativo ou tem 4+ palavras)
   const lower = trimmed.toLowerCase();
   const isQuestion =
-    /^(onde|qual|quais|quem|como|quando|porque|por que|o que|em que|de que)\b/i.test(lower) ||
-    lower.includes('?');
+    /^(onde|aonde|qual|quais|quem|como|quando|porque|por que|o que|em que|de que)\b/i.test(lower) ||
+    lower.includes('?') ||
+    lower.split(/\s+/).length >= 4;
 
   if (!isQuestion) return null;
 
@@ -457,7 +469,7 @@ function extractBibleKeywords(query: string): string | null {
   // Precisa de pelo menos 1 palavra-chave
   if (words.length === 0) return null;
 
-  return words.join(' ');
+  return words;
 }
 
 /**
@@ -477,23 +489,45 @@ export async function searchBibleVerses(
   // Se a query for uma pergunta em linguagem natural, extrai palavras-chave.
   // Caso contrário, usa aspas para busca literal exata no FTS5.
   const keywords = extractBibleKeywords(trimmed);
-  const formattedQuery = keywords ?? (
-    trimmed.startsWith('"') && trimmed.endsWith('"')
-      ? trimmed
-      : `"${trimmed}"`
-  );
+  const formattedQuery = keywords
+    ? keywords.join(' ')
+    : (trimmed.startsWith('"') && trimmed.endsWith('"') ? trimmed : `"${trimmed}"`);
 
   // 1. Tenta consultar a API de busca da Bíblia Vive na borda (Cloudflare Worker FTS5 com v=acf para a versão oficial)
   try {
-    const url = `https://busca.bibliavive.com.br?q=${encodeURIComponent(formattedQuery)}&v=acf&limit=${limit}&offset=${offset}`;
-    const res = await fetch(url, {
+    let url = `https://busca.bibliavive.com.br?q=${encodeURIComponent(formattedQuery)}&v=acf&limit=${limit}&offset=${offset}`;
+    let res = await fetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },
       signal,
     });
 
     if (res.ok) {
-      const data = await res.json();
+      let data = await res.json();
+
+      // Relaxamento automático: se a busca com todas as palavras-chave retornou 0 versículos
+      // e temos 2 ou mais palavras, tenta com o par principal (primeiras 2 palavras)
+      if (
+        keywords &&
+        keywords.length >= 3 &&
+        (!Array.isArray(data.verses) || data.verses.length === 0) &&
+        offset === 0
+      ) {
+        const relaxedQuery = keywords.slice(0, 2).join(' ');
+        const relaxedUrl = `https://busca.bibliavive.com.br?q=${encodeURIComponent(relaxedQuery)}&v=acf&limit=${limit}&offset=0`;
+        const relaxedRes = await fetch(relaxedUrl, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          signal,
+        });
+        if (relaxedRes.ok) {
+          const relaxedData = await relaxedRes.json();
+          if (Array.isArray(relaxedData.verses) && relaxedData.verses.length > 0) {
+            data = relaxedData;
+          }
+        }
+      }
+
       if (Array.isArray(data.verses)) {
         const seenPassages = new Set<string>();
         const results: BibleSearchResult[] = [];
