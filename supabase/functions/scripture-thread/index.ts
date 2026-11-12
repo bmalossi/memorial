@@ -301,32 +301,23 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    // 1. Verificação de Autenticação Mandatória (JWT do Usuário)
+    // 1. Verificação de Autenticação (Chave de API do App ou Sessão do Leitor)
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Authorization header obrigatório" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
+    const apiKey = req.headers.get("apikey");
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    const token = (authHeader ? authHeader.replace(/^Bearer\s+/i, "") : apiKey)?.trim() ?? "";
 
-    if (userError || !user) {
+    if (!token) {
       return new Response(
-        JSON.stringify({ error: "Sessão inválida ou expirada" }),
+        JSON.stringify({ error: "Autorização ausente" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Cliente interno para leitura das Escrituras no banco de dados com service_role
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // 2. Validação da Requisição
     const body = await req.json().catch(() => ({}));

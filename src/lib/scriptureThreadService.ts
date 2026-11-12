@@ -49,21 +49,11 @@ export async function queryScriptureThread(
   const fallbackFn = options?.customFallback || ((q, sig) => searchBibleVerses(q, 0, 50, sig));
 
   try {
-    // 1. Verifica autenticação de sessão
-    const { data: sessionData } = await supabase.auth.getSession();
+    // 1. Obtém token de sessão se existir (opcional)
+    const { data: sessionData } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
     const token = sessionData?.session?.access_token;
 
-    // Se o usuário não estiver autenticado (ex.: onboarding ou offline), cai no fallback tradicional
-    if (!token && !options?.customInvoker) {
-      const fallbackData = await fallbackFn(trimmed, options?.signal);
-      return {
-        type: 'keyword_results',
-        results: fallbackData.results,
-        total: fallbackData.total,
-      };
-    }
-
-    // 2. Invoca a Edge Function scripture-thread
+    // 2. Invoca a Edge Function scripture-thread (o cliente Supabase envia apikey automaticamente)
     const invoker = options?.customInvoker || ((fn, opts) => supabase.functions.invoke(fn, opts));
     const { data, error } = await invoker('scripture-thread', {
       body: { user_query: trimmed },

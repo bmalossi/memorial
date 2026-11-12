@@ -1540,7 +1540,7 @@ export function LinhasagradaScreen({ navigation }: Props) {
                     setActiveFilter('todos');
                   }}
                   onOpenBibleSearch={() =>
-                    navigation?.navigate?.('Busca', { initialQuery: searchQuery })
+                    navigation?.navigate?.('Busca', { initialQuery: searchQuery, tab: 'escrituras' })
                   }
                 />
               )}

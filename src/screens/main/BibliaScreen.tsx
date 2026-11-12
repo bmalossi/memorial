@@ -331,8 +331,19 @@ export function BibliaScreen({ navigation, route }: Props) {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Ações à direita: Versão da Bíblia (ACF, ARC, NVI) e Ajuste de fonte (AA) */}
+        {/* Ações à direita: Busca nas Escrituras, Versão da Bíblia (ACF, ARC, NVI) e Ajuste de fonte (AA) */}
         <View style={s.headerRight}>
+          {/* Botão de Busca nas Escrituras */}
+          <TouchableOpacity
+            onPress={() => navigation?.navigate?.('Busca', { tab: 'escrituras' })}
+            style={s.iconButton}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Buscar nas Escrituras"
+          >
+            <Feather name="search" size={17} color={colors.text.secondary} />
+          </TouchableOpacity>
+
           {/* Quadrado de Versão da Bíblia ao lado do AA */}
           <Animated.View style={{ transform: [{ scale: versionScaleAnim }] }}>
             <TouchableOpacity

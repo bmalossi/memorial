@@ -32,18 +32,51 @@ type SearchTab = 'marcos' | 'escrituras';
 const QUICK_TAGS = ['#providência', '#família', '#decisão', '#revelação', '#consagração'];
 const QUICK_THEMES = ['paz', 'provisão', 'fidelidade', 'pastor', 'refúgio', 'cura'];
 
+// Perguntas de exemplo que ativam a Consulta de Passagem Direta via JEV
+const SCRIPTURE_QUERY_EXAMPLES = [
+  'Onde Paulo fala da armadura de Deus?',
+  'Qual passagem mostra a genealogia de Jesus?',
+  'O Senhor é meu pastor',
+  'Onde está o Pai Nosso na Bíblia?',
+  'Mais que vencedores nada nos separará',
+  'O Verbo se fez carne',
+  'Bem-aventurados os humildes',
+  'Esconderijo do Altíssimo',
+  'Hino ao amor 1 Coríntios',
+  'O servo sofredor em Isaías',
+];
+
 interface Props {
   navigation?: any;
+  route?: {
+    params?: {
+      initialQuery?: string;
+      tab?: SearchTab;
+    };
+  };
 }
 
-export function BuscaScreen({ navigation }: Props) {
+export function BuscaScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
 
-  const [query, setQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<SearchTab>('marcos');
+  const [query, setQuery] = useState(route?.params?.initialQuery || '');
+  const [activeTab, setActiveTab] = useState<SearchTab>(
+    route?.params?.tab || (route?.params?.initialQuery ? 'escrituras' : 'marcos')
+  );
   const [onlyAnswered, setOnlyAnswered] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (route?.params?.initialQuery !== undefined) {
+      setQuery(route.params.initialQuery);
+    }
+    if (route?.params?.tab) {
+      setActiveTab(route.params.tab);
+    } else if (route?.params?.initialQuery) {
+      setActiveTab('escrituras');
+    }
+  }, [route?.params?.initialQuery, route?.params?.tab]);
 
   const s = useMemo(() => getBuscaStyles(colors, isDark), [colors, isDark]);
 
@@ -165,6 +198,12 @@ export function BuscaScreen({ navigation }: Props) {
     setSelectedTag(null);
   };
 
+  const handleSelectScriptureExample = (example: string) => {
+    setQuery(example);
+    setActiveTab('escrituras');
+    setSelectedTag(null);
+  };
+
   const handleCardPress = (entry: MemorialEntry) => {
     navigation?.navigate?.('MarcoDetalhe', { entry });
   };
@@ -266,7 +305,7 @@ export function BuscaScreen({ navigation }: Props) {
             placeholder={
               activeTab === 'marcos'
                 ? 'Buscar por tema, tag, palavra ou data…'
-                : 'Buscar nas Escrituras (ex: pastor, paz, fé)…'
+                : 'Faça uma pergunta ou busque um tema bíblico…'
             }
             placeholderTextColor={colors.text.muted}
             value={query}
@@ -309,9 +348,16 @@ export function BuscaScreen({ navigation }: Props) {
           style={[s.tabPill, activeTab === 'escrituras' && s.tabPillActive]}
           activeOpacity={0.8}
         >
-          <Text style={[s.tabPillText, activeTab === 'escrituras' && s.tabPillTextActive]}>
-            Escrituras (Bíblia) {bibleTotal > 0 ? `(${bibleTotal.toLocaleString('pt-BR')})` : ''}
-          </Text>
+          <View style={s.tabPillContent}>
+            <Text style={[s.tabPillText, activeTab === 'escrituras' && s.tabPillTextActive]}>
+              Escrituras {bibleTotal > 0 ? `(${bibleTotal.toLocaleString('pt-BR')})` : ''}
+            </Text>
+            {activeTab !== 'escrituras' && (
+              <View style={s.tabPillBadge}>
+                <Text style={s.tabPillBadgeText}>IA</Text>
+              </View>
+            )}
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -461,29 +507,34 @@ export function BuscaScreen({ navigation }: Props) {
             <Text style={s.emptyTitle}>
               {query.trim()
                 ? 'Nenhum versículo encontrado'
-                : 'Pesquise nas Escrituras'}
+                : 'Consulta Bíblica por Intenção'}
             </Text>
             <Text style={s.emptySubtitle}>
               {query.trim()
-                ? `Nenhuma passagem bíblica encontrada com o termo "${query}".`
-                : 'Digite uma palavra para localizar passagens por relevância em toda a Bíblia.'}
+                ? `Nenhuma passagem encontrada para "${query}". Tente reformular a pergunta.`
+                : 'Digite uma pergunta em linguagem natural ou uma palavra-chave. O Memorial encontra a passagem exata nas Escrituras.'}
             </Text>
 
-            {/* Temas bíblicos rápidos */}
-            <View style={s.suggestionsBox}>
-              <Text style={s.suggestionsLabel}>PALAVRAS-CHAVE DAS ESCRITURAS</Text>
-              <View style={s.suggestionChipsWrap}>
-                {QUICK_THEMES.map((theme) => (
-                  <TouchableOpacity
-                    key={theme}
-                    onPress={() => handleSelectThemeChip(theme)}
-                    style={s.suggestionChip}
-                  >
-                    <Text style={s.suggestionChipText}>{theme}</Text>
-                  </TouchableOpacity>
-                ))}
+            {/* Exemplos de consulta por linguagem natural */}
+            {!query.trim() && (
+              <View style={s.suggestionsBox}>
+                <View style={s.suggestionsLabelRow}>
+                  <Feather name="zap" size={10} color={colors.amber.DEFAULT} />
+                  <Text style={s.suggestionsLabel}>EXEMPLOS DE CONSULTA</Text>
+                </View>
+                <View style={s.suggestionChipsWrap}>
+                  {SCRIPTURE_QUERY_EXAMPLES.map((example) => (
+                    <TouchableOpacity
+                      key={example}
+                      onPress={() => handleSelectScriptureExample(example)}
+                      style={s.suggestionChip}
+                    >
+                      <Text style={s.suggestionChipText}>{example}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
-            </View>
+            )}
           </View>
         ) : (
           <FlatList
@@ -774,6 +825,11 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
     borderColor: colors.border.subtle,
     gap: spacing['3'],
   },
+  suggestionsLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   suggestionsLabel: {
     color: colors.text.muted,
     fontSize: 10,
@@ -797,6 +853,42 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
     color: colors.amber.DEFAULT,
     fontSize: 12,
     fontWeight: typography.weight.medium,
+  },
+  tabPillContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  tabPillBadge: {
+    backgroundColor: colors.amber.DEFAULT,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  tabPillBadgeText: {
+    color: isDark ? '#1A140E' : '#1A140E',
+    fontSize: 8,
+    fontWeight: typography.weight.bold,
+    letterSpacing: 0.5,
+  },
+  scriptureHintBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginHorizontal: spacing['5'],
+    marginTop: spacing['2'],
+    backgroundColor: isDark ? 'rgba(231, 176, 117, 0.08)' : 'rgba(184, 126, 40, 0.07)',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(231, 176, 117, 0.18)' : 'rgba(184, 126, 40, 0.20)',
+    padding: spacing['3'],
+  },
+  scriptureHintText: {
+    flex: 1,
+    color: isDark ? 'rgba(231, 176, 117, 0.75)' : 'rgba(140, 95, 30, 0.85)',
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontStyle: 'italic',
   },
   resultsMetaRow: {
     paddingVertical: spacing['2'],
@@ -827,3 +919,4 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
   },
 });
 }
+
