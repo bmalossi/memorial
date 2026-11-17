@@ -7,6 +7,7 @@
 
 import { MemorialEntry } from './types';
 import { normalizeBookSlug } from './bibleData';
+import { logger } from './logger';
 
 export interface BibleSearchResult {
   id: string;
@@ -401,27 +402,27 @@ export interface BibleSearchResponseData {
 }
 
 /**
- * Stop-words portuguesas para extração de palavras-chave bíblicas
- * de perguntas em linguagem natural. Permite que o FTS5 encontre
- * conteúdo bíblico mesmo quando a query é uma pergunta completa.
+ * Stop-words portuguesas (normalizadas: sem acentos, minúsculas) para extração
+ * de palavras-chave bíblicas de perguntas e consultas em linguagem natural.
+ * Permite que o FTS5 encontre conteúdo bíblico mesmo em dúvidas curtas (2–3 palavras)
+ * ou frases completas sem acentuação.
  */
 const PORTUGUESE_STOP_WORDS = new Set([
   // Interrogativos
-  'onde', 'aonde', 'qual', 'quais', 'quem', 'como', 'quando', 'porque', 'por que', 'quanto', 'quantos', 'quanta', 'quantas', 'que',
-  // Verbos de busca bíblica (meta-palavras)
+  'onde', 'aonde', 'qual', 'quais', 'quem', 'como', 'quando', 'porque', 'quanto', 'quantos', 'quanta', 'quantas', 'que',
+  // Verbos auxiliares e de busca bíblica (meta-palavras)
   'fala', 'falam', 'falando', 'falou', 'falar',
   'diz', 'dizem', 'dizendo', 'disse', 'dizer',
-  'esta', 'está', 'estao', 'estão', 'estava', 'estavam',
-  'fica', 'ficam', 'mostra', 'mostram', 'mostrou',
-  'relata', 'relatam', 'conta', 'contam',
-  'ensina', 'ensinam', 'explica', 'explicam',
-  'encontra', 'encontrar', 'acha', 'achar',
-  'saber', 'ha', 'há', 'haver', 'tem', 'têm', 'tinha', 'tinham', 'ser', 'estar', 'foi', 'foram',
+  'esta', 'estao', 'estava', 'estavam', 'estar',
+  'fica', 'ficam', 'ficou', 'mostra', 'mostram', 'mostrou',
+  'relata', 'relatam', 'conta', 'contam', 'contou',
+  'ensina', 'ensinam', 'ensinou', 'explica', 'explicam',
+  'encontra', 'encontrar', 'encontro', 'acha', 'achar',
+  'saber', 'sei', 'ha', 'haver', 'tem', 'tinha', 'tinham', 'ter', 'ser', 'sao', 'foi', 'foram', 'era', 'eram',
   // Referências ao texto sagrado (meta-palavras)
-  'passagem', 'passagens', 'versiculo', 'versículo', 'versiculos', 'versículos',
-  'capitulo', 'capítulo', 'capitulos', 'capítulos',
-  'livro', 'livros', 'biblia', 'bíblia', 'escritura', 'escrituras',
-  'texto', 'textos', 'parte', 'lugar', 'trecho',
+  'passagem', 'passagens', 'versiculo', 'versiculos', 'verso', 'versos',
+  'capitulo', 'capitulos', 'livro', 'livros', 'biblia', 'escritura', 'escrituras',
+  'texto', 'textos', 'parte', 'lugar', 'trecho', 'historia',
   // Qualificadores temporais e contextuais conversacionais
   'fim', 'tempos', 'tempo', 'dias', 'dia', 'mundo', 'terra',
   'velho', 'antigo', 'novo', 'testamento',
@@ -429,47 +430,136 @@ const PORTUGUESE_STOP_WORDS = new Set([
   'o', 'a', 'os', 'as', 'um', 'uma', 'uns', 'umas',
   'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas',
   'por', 'para', 'pra', 'pro', 'com', 'sem', 'sob', 'sobre', 'acerca', 'respeito',
-  'ao', 'aos', 'pelo', 'pela', 'pelos', 'pelas', 'segundo', 'conforme',
+  'ao', 'aos', 'pelo', 'pela', 'pelos', 'pelas', 'segundo', 'conforme', 'entre', 'ate',
   // Conjunções e pronomes comuns
-  'se', 'ou', 'mas', 'e', 'me', 'te', 'lhe', 'lhes', 'nos', 'vos',
-  'ele', 'ela', 'eles', 'elas',
+  'se', 'ou', 'mas', 'e', 'nem', 'me', 'te', 'lhe', 'lhes', 'nos', 'vos',
+  'ele', 'ela', 'eles', 'elas', 'voce', 'voces',
   'este', 'esta', 'estes', 'estas', 'essa', 'esse', 'esses', 'essas',
   'aquele', 'aquela', 'aqueles', 'aquelas', 'isto', 'isso', 'aquilo',
   'tudo', 'todo', 'toda', 'todos', 'todas',
   'algo', 'algum', 'alguma', 'alguns', 'algumas',
   'outro', 'outra', 'outros', 'outras',
   'muito', 'muita', 'muitos', 'muitas',
-  'meu', 'minha', 'meus', 'minhas', 'seu', 'sua', 'seus', 'suas',
+  'meu', 'minha', 'meus', 'minhas', 'seu', 'sua', 'seus', 'suas', 'nosso', 'nossa', 'nossos', 'nossas',
 ]);
 
-/**
- * Detecta se a query é uma pergunta em linguagem natural e extrai
- * apenas as palavras-chave de conteúdo bíblico (sem stop-words).
- * Retorna array de palavras-chave ou null se for uma busca direta formulada.
- */
-function extractBibleKeywords(query: string): string[] | null {
-  const trimmed = query.trim();
+// Termos bíblicos válidos de apenas 2 caracteres que não devem ser descartados
+const TWO_LETTER_BIBLICAL_TERMS = new Set(['fe', 'jo', 'ur', 'ai', 'nu']);
 
-  // Já tem aspas: usar como literal sem modificar
+/**
+ * Normaliza e extrai palavras-chave de conteúdo bíblico descartando stop-words.
+ * Retorna array de palavras-chave ou null quando for busca literal entre aspas ou palavra única.
+ */
+export function extractBibleKeywords(query: string): string[] | null {
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+
+  // Já tem aspas explícitas do usuário: preservar como busca literal exata
   if (trimmed.startsWith('"') && trimmed.endsWith('"')) return null;
 
-  // Detecta padrão de pergunta ou frase descritiva (começa com interrogativo ou tem 4+ palavras)
-  const lower = trimmed.toLowerCase();
-  const isQuestion =
-    /^(onde|aonde|qual|quais|quem|como|quando|porque|por que|o que|em que|de que)\b/i.test(lower) ||
-    lower.includes('?') ||
-    lower.split(/\s+/).length >= 4;
+  const normalized = normalizeSearchString(trimmed);
+  const rawTokens = normalized.split(/\s+/).filter(Boolean);
+  const isQuestionOrPhrase =
+    /^(onde|aonde|qual|quais|quem|como|quando|porque|por que|o que|em que|de que)\b/i.test(normalized) ||
+    trimmed.includes('?') ||
+    rawTokens.length >= 2;
 
-  if (!isQuestion) return null;
+  if (!isQuestionOrPhrase) return null;
 
-  // Remove pontuação e extrai palavras-chave descartando stop-words
-  const cleaned = lower.replace(/[?!.,;:¿¡()"']/g, ' ');
-  const words = cleaned.split(/\s+/).filter(w => w.length > 2 && !PORTUGUESE_STOP_WORDS.has(w));
+  const cleaned = normalized.replace(/[?!.,;:¿¡()"'-]/g, ' ');
+  const words = cleaned
+    .split(/\s+/)
+    .filter((w) => !PORTUGUESE_STOP_WORDS.has(w) && (w.length > 2 || TWO_LETTER_BIBLICAL_TERMS.has(w)));
 
-  // Precisa de pelo menos 1 palavra-chave
   if (words.length === 0) return null;
 
-  return words;
+  // Remove duplicatas mantendo ordem original
+  return Array.from(new Set(words));
+}
+
+/**
+ * Seleciona os termos mais específicos de uma lista de palavras-chave
+ * (ex.: para relaxamento quando todos os termos combinados retornam vazio).
+ */
+function pickMostSpecificKeywords(keywords: string[], count: number): string[] {
+  if (keywords.length <= count) return keywords;
+  // Prioriza palavras mais longas mantendo sua ordem relativa original
+  const indexed = keywords.map((word, index) => ({ word, index }));
+  indexed.sort((a, b) => b.word.length - a.word.length || a.index - b.index);
+  return indexed
+    .slice(0, count)
+    .sort((a, b) => a.index - b.index)
+    .map((item) => item.word);
+}
+
+/**
+ * Busca offline resiliente no catálogo em memória por palavras-chave normalizadas.
+ */
+export function searchLocalBibleFallback(query: string): BibleSearchResult[] {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  const normQuery = normalizeSearchString(trimmed.replace(/^["']|["']$/g, ''));
+  const keywords = extractBibleKeywords(trimmed);
+  const searchTerms =
+    keywords && keywords.length > 0
+      ? keywords
+      : normQuery
+          .replace(/[?!.,;:¿¡()"'-]/g, ' ')
+          .split(/\s+/)
+          .filter((w) => !PORTUGUESE_STOP_WORDS.has(w) && (w.length > 2 || TWO_LETTER_BIBLICAL_TERMS.has(w)));
+
+  const effectiveTerms = searchTerms.length > 0 ? searchTerms : [normQuery];
+
+  const scored = LOCAL_BIBLE_VERSES.map((v) => {
+    const haystack = normalizeSearchString(`${v.reference} ${v.bookName} ${v.text}`);
+    let matchedCount = 0;
+    let score = 0;
+
+    if (normQuery && haystack.includes(normQuery)) {
+      score += 100;
+    }
+
+    for (const term of effectiveTerms) {
+      if (hasExactWord(haystack, term)) {
+        matchedCount++;
+        score += 20;
+      } else if (haystack.includes(term)) {
+        matchedCount++;
+        score += 8;
+      }
+    }
+
+    return { verse: v, matchedCount, score };
+  }).filter((item) => item.score > 0);
+
+  if (scored.length === 0) return [];
+
+  // Prioriza versículos que atendam a todos os termos quando possível
+  const fullMatches = scored.filter((item) => item.matchedCount === effectiveTerms.length);
+  const pool = fullMatches.length > 0 ? fullMatches : scored;
+
+  pool.sort((a, b) => b.score - a.score);
+  return pool.map((item) => item.verse);
+}
+
+/**
+ * Executa uma consulta ao endpoint FTS5 da Bíblia Vive.
+ */
+async function fetchBibleFtsEndpoint(
+  ftsQuery: string,
+  limit: number,
+  offset: number,
+  signal?: AbortSignal
+): Promise<any | null> {
+  const url = `https://busca.bibliavive.com.br?q=${encodeURIComponent(ftsQuery)}&v=acf&limit=${limit}&offset=${offset}`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    signal,
+  });
+  if (!res.ok) return null;
+  return res.json();
 }
 
 /**
@@ -484,9 +574,7 @@ export async function searchBibleVerses(
   const trimmed = query.trim();
   if (!trimmed) return { results: [], total: 0 };
 
-  const normQuery = normalizeSearchString(trimmed);
-
-  // Se a query for uma pergunta em linguagem natural, extrai palavras-chave.
+  // Se a query for uma pergunta ou expressão multi-palavra sem aspas, extrai palavras-chave.
   // Caso contrário, usa aspas para busca literal exata no FTS5.
   const keywords = extractBibleKeywords(trimmed);
   const formattedQuery = keywords
@@ -495,70 +583,68 @@ export async function searchBibleVerses(
 
   // 1. Tenta consultar a API de busca da Bíblia Vive na borda (Cloudflare Worker FTS5 com v=acf para a versão oficial)
   try {
-    let url = `https://busca.bibliavive.com.br?q=${encodeURIComponent(formattedQuery)}&v=acf&limit=${limit}&offset=${offset}`;
-    let res = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      signal,
-    });
+    let data = await fetchBibleFtsEndpoint(formattedQuery, limit, offset, signal);
 
-    if (res.ok) {
-      let data = await res.json();
+    // Relaxamento automático multinível quando offset === 0 retorna vazio
+    if (
+      keywords &&
+      offset === 0 &&
+      (!data || !Array.isArray(data.verses) || data.verses.length === 0)
+    ) {
+      // Nível 1: para 3+ termos, tenta os 2 termos mais específicos
+      if (keywords.length >= 3) {
+        const relaxedPair = pickMostSpecificKeywords(keywords, 2).join(' ');
+        const pairData = await fetchBibleFtsEndpoint(relaxedPair, limit, 0, signal);
+        if (pairData && Array.isArray(pairData.verses) && pairData.verses.length > 0) {
+          data = pairData;
+        }
+      }
 
-      // Relaxamento automático: se a busca com todas as palavras-chave retornou 0 versículos
-      // e temos 2 ou mais palavras, tenta com o par principal (primeiras 2 palavras)
+      // Nível 2: se ainda estiver vazio com 2+ termos, tenta apenas o termo mais específico
       if (
-        keywords &&
-        keywords.length >= 3 &&
-        (!Array.isArray(data.verses) || data.verses.length === 0) &&
-        offset === 0
+        keywords.length >= 2 &&
+        (!data || !Array.isArray(data.verses) || data.verses.length === 0)
       ) {
-        const relaxedQuery = keywords.slice(0, 2).join(' ');
-        const relaxedUrl = `https://busca.bibliavive.com.br?q=${encodeURIComponent(relaxedQuery)}&v=acf&limit=${limit}&offset=0`;
-        const relaxedRes = await fetch(relaxedUrl, {
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-          signal,
-        });
-        if (relaxedRes.ok) {
-          const relaxedData = await relaxedRes.json();
-          if (Array.isArray(relaxedData.verses) && relaxedData.verses.length > 0) {
-            data = relaxedData;
+        const singleSpecific = pickMostSpecificKeywords(keywords, 1)[0];
+        if (singleSpecific) {
+          const singleData = await fetchBibleFtsEndpoint(singleSpecific, limit, 0, signal);
+          if (singleData && Array.isArray(singleData.verses) && singleData.verses.length > 0) {
+            data = singleData;
           }
         }
       }
+    }
 
-      if (Array.isArray(data.verses)) {
-        const seenPassages = new Set<string>();
-        const results: BibleSearchResult[] = [];
+    if (data && Array.isArray(data.verses)) {
+      const seenPassages = new Set<string>();
+      const results: BibleSearchResult[] = [];
 
-        for (const v of data.verses) {
-          const passageKey = `${(v.bookId || 'sl').toLowerCase()}.${v.chapter}.${v.verse}`;
-          if (seenPassages.has(passageKey)) continue;
-          seenPassages.add(passageKey);
+      for (const v of data.verses) {
+        const passageKey = `${(v.bookId || 'sl').toLowerCase()}.${v.chapter}.${v.verse}`;
+        if (seenPassages.has(passageKey)) continue;
+        seenPassages.add(passageKey);
 
-          const cleanedText = sanitizeBibleText(v.text || '');
-          const cleanRef = sanitizeBibleText(v.reference || `${v.bookName} ${v.chapter}:${v.verse}`);
-          const cleanBookName = sanitizeBibleText(v.bookName || v.bookId);
+        const cleanedText = sanitizeBibleText(v.text || '');
+        const cleanRef = sanitizeBibleText(v.reference || `${v.bookName} ${v.chapter}:${v.verse}`);
+        const cleanBookName = sanitizeBibleText(v.bookName || v.bookId);
 
-          const resolvedSlug = normalizeBookSlug(v.bookId || v.bookName || 'sl');
+        const resolvedSlug = normalizeBookSlug(v.bookId || v.bookName || 'sl');
 
-          results.push({
-            id: `${v.bookId}-${v.chapter}-${v.verse}-${offset + results.length}`,
-            reference: cleanRef,
-            bookName: cleanBookName,
-            bookSlug: resolvedSlug,
-            chapter: v.chapter || 1,
-            verse: v.verse || 1,
-            text: cleanedText,
-          });
-        }
-
-        return {
-          results,
-          total: data.total || results.length,
-        };
+        results.push({
+          id: `${v.bookId}-${v.chapter}-${v.verse}-${offset + results.length}`,
+          reference: cleanRef,
+          bookName: cleanBookName,
+          bookSlug: resolvedSlug,
+          chapter: v.chapter || 1,
+          verse: v.verse || 1,
+          text: cleanedText,
+        });
       }
+
+      return {
+        results,
+        total: data.total || results.length,
+      };
     }
   } catch (err: any) {
     if (
@@ -568,17 +654,11 @@ export async function searchBibleVerses(
     ) {
       return { results: [], total: 0 };
     }
-    __DEV__ && console.warn('[Memorial Search] Falha ao consultar endpoint online, usando busca local:', err?.message || err);
+    logger.warn('[Memorial Search] Falha ao consultar endpoint online, usando busca local:', err?.message || err);
   }
 
-  // 2. Fallback offline: busca nos versículos em memória
-  const localMatches = LOCAL_BIBLE_VERSES.filter((v) => {
-    return (
-      normalizeSearchString(v.text).includes(normQuery) ||
-      normalizeSearchString(v.reference).includes(normQuery) ||
-      normalizeSearchString(v.bookName).includes(normQuery)
-    );
-  });
+  // 2. Fallback offline resiliente por palavras-chave normalizadas
+  const localMatches = searchLocalBibleFallback(trimmed);
 
   return {
     results: localMatches,

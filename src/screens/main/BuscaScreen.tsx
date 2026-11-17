@@ -134,6 +134,7 @@ export function BuscaScreen({ navigation, route }: Props) {
     setBibleLoading(true);
     queryScriptureThread(q, { signal: controller.signal })
       .then((res) => {
+        if (controller.signal.aborted) return;
         if (res.type === 'direct_passage') {
           setDirectPassage(res.passage);
           setBibleResults([]);
@@ -146,11 +147,19 @@ export function BuscaScreen({ navigation, route }: Props) {
         setBibleLoading(false);
       })
       .catch((err) => {
-        if (err?.name !== 'AbortError') {
+        if (err?.name !== 'AbortError' && !controller.signal.aborted) {
           setBibleLoading(false);
         }
       });
   }, [query, activeTab, selectedTag, allMemorials, onlyAnswered]);
+
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (route?.params?.initialQuery !== undefined) {
@@ -202,19 +211,51 @@ export function BuscaScreen({ navigation, route }: Props) {
     }
   };
 
-  const handleLoadMoreBible = () => {
+  const handleLoadMoreBible = useCallback(() => {
     if (loadingMore || bibleResults.length >= bibleTotal || !executedQuery.trim() || directPassage) return;
     setLoadingMore(true);
 
-    searchBibleVerses(executedQuery, bibleResults.length, 30)
+    const signal = abortRef.current?.signal;
+    searchBibleVerses(executedQuery, bibleResults.length, 30, signal)
       .then((res) => {
+        if (signal?.aborted) return;
         setBibleResults((prev) => [...prev, ...res.results]);
         setLoadingMore(false);
       })
       .catch(() => {
-        setLoadingMore(false);
+        if (!signal?.aborted) {
+          setLoadingMore(false);
+        }
       });
-  };
+  }, [loadingMore, bibleResults.length, bibleTotal, executedQuery, directPassage]);
+
+  const handleSearchAllOccurrences = useCallback(() => {
+    const q = executedQuery.trim();
+    if (!q) return;
+
+    Haptics.selectionAsync();
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setBibleLoading(true);
+    setDirectPassage(null);
+
+    searchBibleVerses(q, 0, 50, controller.signal)
+      .then((res) => {
+        if (controller.signal.aborted) return;
+        setBibleResults(res.results);
+        setBibleTotal(res.total);
+        setBibleLoading(false);
+      })
+      .catch((err) => {
+        if (err?.name !== 'AbortError' && !controller.signal.aborted) {
+          setBibleLoading(false);
+        }
+      });
+  }, [executedQuery]);
 
   const handleSelectTagChip = (tag: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -258,7 +299,8 @@ export function BuscaScreen({ navigation, route }: Props) {
     });
   };
 
-  const handleReadBiblePassage = (verse: BibleSearchResult) => {
+  const handleReadBiblePassage = useCallback((verse: BibleSearchResult) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation?.navigate?.('Main', {
       screen: 'Biblia',
       params: {
@@ -267,9 +309,10 @@ export function BuscaScreen({ navigation, route }: Props) {
         verse: verse.verse,
       },
     });
-  };
+  }, [navigation]);
 
-  const handleCreateMarcoFromVerse = (verse: BibleSearchResult) => {
+  const handleCreateMarcoFromVerse = useCallback((verse: BibleSearchResult) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setPrefilledVerse(verse);
     setPrefilledBibleRef({
       book: verse.bookName,
@@ -281,9 +324,9 @@ export function BuscaScreen({ navigation, route }: Props) {
     });
     setPrefilledVerseText(verse.text);
     setSheetVisible(true);
-  };
+  }, []);
 
-  const handleCreateMarcoFromPassage = (passage: ScripturePassageData) => {
+  const handleCreateMarcoFromPassage = useCallback((passage: ScripturePassageData) => {
     setPrefilledBibleRef({
       book: passage.book_name,
       slug: passage.book_slug,
@@ -295,20 +338,21 @@ export function BuscaScreen({ navigation, route }: Props) {
     const combinedVerseText = passage.verses.map((v) => `${v.verse}. ${v.text}`).join('\n');
     setPrefilledVerseText(combinedVerseText);
     setSheetVisible(true);
-  };
+  }, []);
 
-  const renderBibleResultItem = ({ item }: { item: BibleSearchResult }) => (
+  const renderBibleResultItem = useCallback(({ item }: { item: BibleSearchResult }) => (
     <View style={s.bibleCard}>
       <View style={s.bibleHeader}>
-        <Text style={s.bibleRefText}>{item.reference}</Text>
+        <Text maxFontSizeMultiplier={1.3} style={s.bibleRefText}>{item.reference}</Text>
         <TouchableOpacity
           onPress={() => handleReadBiblePassage(item)}
           style={s.readChapterLink}
+          hitSlop={{ top: 13, bottom: 13, left: 10, right: 10 }}
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel={`Ler capítulo completo de ${item.reference}`}
         >
-          <Text style={s.readChapterLinkText}>Ler capítulo</Text>
+          <Text maxFontSizeMultiplier={1.3} style={s.readChapterLinkText}>Ler capítulo</Text>
           <Feather name="arrow-right" size={12} color={colors.amber.DEFAULT} />
         </TouchableOpacity>
       </View>
@@ -319,16 +363,17 @@ export function BuscaScreen({ navigation, route }: Props) {
         <TouchableOpacity
           onPress={() => handleCreateMarcoFromVerse(item)}
           style={s.connectToMemorialBtn}
+          hitSlop={{ top: 9, bottom: 9, left: 8, right: 8 }}
           activeOpacity={0.75}
           accessibilityRole="button"
           accessibilityLabel={`Criar marco com a passagem ${item.reference}`}
         >
           <Feather name="bookmark" size={13} color={colors.amber.DEFAULT} />
-          <Text style={s.connectToMemorialBtnText}>Criar marco com esta passagem</Text>
+          <Text maxFontSizeMultiplier={1.3} style={s.connectToMemorialBtnText}>Criar marco com esta passagem</Text>
         </TouchableOpacity>
       </View>
     </View>
-  );
+  ), [s, colors.amber.DEFAULT, handleReadBiblePassage, handleCreateMarcoFromVerse]);
 
   return (
     <View style={[s.root, { paddingTop: insets.top }]}>
@@ -340,7 +385,7 @@ export function BuscaScreen({ navigation, route }: Props) {
 
       {/* ── Top Header ── */}
       <View style={s.topHeader}>
-        <Text style={s.wordmark}>BUSCA ESPIRITUAL</Text>
+        <Text maxFontSizeMultiplier={1.3} style={s.wordmark} accessibilityRole="header">BUSCA ESPIRITUAL</Text>
       </View>
 
       {/* ── Barra de Input de Busca ── */}
@@ -350,7 +395,7 @@ export function BuscaScreen({ navigation, route }: Props) {
             onPress={() => executeSearch()}
             style={s.searchIconBtn}
             activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             accessibilityRole="button"
             accessibilityLabel="Pesquisar"
           >
@@ -362,6 +407,12 @@ export function BuscaScreen({ navigation, route }: Props) {
           </TouchableOpacity>
           <TextInput
             style={s.searchInput}
+            accessibilityLabel={
+              activeTab === 'marcos'
+                ? 'Campo de busca nos Marcos de Fé'
+                : 'Campo de dúvida ou busca nas Escrituras'
+            }
+            accessibilityHint="Digite sua dúvida ou termo e toque na lupa ou em Pesquisar no teclado"
             placeholder={
               activeTab === 'marcos'
                 ? 'Buscar por tema, tag, palavra ou data…'
@@ -384,7 +435,7 @@ export function BuscaScreen({ navigation, route }: Props) {
           {query.length > 0 && (
             <TouchableOpacity
               onPress={handleClearSearch}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
               accessibilityRole="button"
               accessibilityLabel="Limpar busca"
             >
@@ -417,22 +468,15 @@ export function BuscaScreen({ navigation, route }: Props) {
           style={[s.tabPill, activeTab === 'escrituras' && s.tabPillActive]}
           activeOpacity={0.8}
           accessibilityRole="tab"
-          accessibilityLabel={`Aba Escrituras, ${bibleTotal > 0 ? `${bibleTotal} passagens encontradas` : 'consulta por intenção'}`}
+          accessibilityLabel={`Aba Escrituras, ${bibleTotal > 0 ? `${bibleTotal} passagens encontradas` : 'busca nas Escrituras'}`}
           accessibilityState={{ selected: activeTab === 'escrituras' }}
         >
-          <View style={s.tabPillContent}>
-            <Text
-              maxFontSizeMultiplier={1.3}
-              style={[s.tabPillText, activeTab === 'escrituras' && s.tabPillTextActive]}
-            >
-              Escrituras {bibleTotal > 0 ? `(${bibleTotal.toLocaleString('pt-BR')})` : ''}
-            </Text>
-            {activeTab !== 'escrituras' && (
-              <View style={s.tabPillBadge}>
-                <Text maxFontSizeMultiplier={1.3} style={s.tabPillBadgeText}>IA</Text>
-              </View>
-            )}
-          </View>
+          <Text
+            maxFontSizeMultiplier={1.3}
+            style={[s.tabPillText, activeTab === 'escrituras' && s.tabPillTextActive]}
+          >
+            Escrituras {bibleTotal > 0 ? `(${bibleTotal.toLocaleString('pt-BR')})` : ''}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -449,6 +493,7 @@ export function BuscaScreen({ navigation, route }: Props) {
               setOnlyAnswered(false);
               setSelectedTag(null);
             }}
+            hitSlop={{ top: 5, bottom: 5, left: 4, right: 4 }}
             style={[
               s.filterChip,
               !onlyAnswered && !selectedTag && s.filterChipActive,
@@ -470,6 +515,7 @@ export function BuscaScreen({ navigation, route }: Props) {
 
           <TouchableOpacity
             onPress={() => setOnlyAnswered((v) => !v)}
+            hitSlop={{ top: 5, bottom: 5, left: 4, right: 4 }}
             style={[s.filterChip, onlyAnswered && s.filterChipActive]}
             accessibilityRole="button"
             accessibilityLabel="Filtrar por orações respondidas"
@@ -497,6 +543,7 @@ export function BuscaScreen({ navigation, route }: Props) {
               <TouchableOpacity
                 key={tag}
                 onPress={() => handleSelectTagChip(tag)}
+                hitSlop={{ top: 5, bottom: 5, left: 4, right: 4 }}
                 style={[s.filterChip, isTagActive && s.filterChipActive]}
                 accessibilityRole="button"
                 accessibilityLabel={`Filtrar por ${tag}`}
@@ -521,7 +568,17 @@ export function BuscaScreen({ navigation, route }: Props) {
       {activeTab === 'marcos' ? (
         // ── Resultados em Marcos de Fé ──
         memorialResults.length === 0 ? (
-          <View style={s.emptyContainer}>
+          <ScrollView
+            style={s.emptyScroll}
+            contentContainerStyle={[
+              s.emptyContainer,
+              { paddingBottom: insets.bottom + 90 },
+            ]}
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            accessibilityLiveRegion="polite"
+          >
             <View style={s.emptyIconWrap}>
               <Feather name="search" size={26} color={colors.text.muted} />
             </View>
@@ -548,7 +605,7 @@ export function BuscaScreen({ navigation, route }: Props) {
                 ))}
               </View>
             </View>
-          </View>
+          </ScrollView>
         ) : (
           <FlatList
             data={memorialResults}
@@ -573,7 +630,7 @@ export function BuscaScreen({ navigation, route }: Props) {
       ) : (
         // ── Resultados em Escrituras (Bíblia) ──
         bibleLoading ? (
-          <View style={s.loadingContainer}>
+          <View style={s.loadingContainer} accessibilityLiveRegion="polite">
             <ActivityIndicator color={colors.amber.DEFAULT} size="small" />
             <Text style={s.loadingText}>Pesquisando nas Escrituras…</Text>
           </View>
@@ -592,9 +649,33 @@ export function BuscaScreen({ navigation, route }: Props) {
               onNavigateToPassage={handleReadDirectPassage}
               onCreateMarco={handleCreateMarcoFromPassage}
             />
+            <TouchableOpacity
+              onPress={handleSearchAllOccurrences}
+              style={s.allOccurrencesBtn}
+              activeOpacity={0.78}
+              accessibilityRole="button"
+              accessibilityLabel={`Ver todas as ocorrências de ${executedQuery} nas Escrituras`}
+              accessibilityHint="Exibe todos os versículos encontrados por busca textual"
+            >
+              <Feather name="list" size={15} color={colors.amber.DEFAULT} />
+              <Text maxFontSizeMultiplier={1.3} style={s.allOccurrencesBtnText}>
+                Ver todas as ocorrências nas Escrituras
+              </Text>
+              <Feather name="chevron-right" size={15} color={colors.amber.DEFAULT} />
+            </TouchableOpacity>
           </ScrollView>
         ) : bibleResults.length === 0 ? (
-          <View style={s.emptyContainer}>
+          <ScrollView
+            style={s.emptyScroll}
+            contentContainerStyle={[
+              s.emptyContainer,
+              { paddingBottom: insets.bottom + 90 },
+            ]}
+            showsVerticalScrollIndicator={false}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            accessibilityLiveRegion="polite"
+          >
             <View style={s.emptyIconWrap}>
               <Feather name="book-open" size={26} color={colors.text.muted} />
             </View>
@@ -632,7 +713,7 @@ export function BuscaScreen({ navigation, route }: Props) {
                 </View>
               </View>
             )}
-          </View>
+          </ScrollView>
         ) : (
           <FlatList
             data={bibleResults}
@@ -647,8 +728,8 @@ export function BuscaScreen({ navigation, route }: Props) {
             renderItem={renderBibleResultItem}
             ListHeaderComponent={
               bibleTotal > 0 ? (
-                <View style={s.resultsMetaRow}>
-                  <Text style={s.resultsMetaText}>
+                <View style={s.resultsMetaRow} accessibilityLiveRegion="polite">
+                  <Text maxFontSizeMultiplier={1.3} style={s.resultsMetaText}>
                     {bibleTotal.toLocaleString('pt-BR')} passagens encontradas · Almeida Corrigida Fiel (ACF)
                   </Text>
                 </View>
@@ -669,7 +750,7 @@ export function BuscaScreen({ navigation, route }: Props) {
                     <ActivityIndicator size="small" color={colors.amber.DEFAULT} />
                   ) : (
                     <>
-                      <Text style={s.loadMoreBtnText}>Carregar mais passagens</Text>
+                      <Text maxFontSizeMultiplier={1.3} style={s.loadMoreBtnText}>Carregar mais passagens</Text>
                       <Feather name="chevron-down" size={16} color={colors.amber.DEFAULT} />
                     </>
                   )}
@@ -727,7 +808,7 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
   },
   wordmark: {
     color: colors.text.muted,
-    fontSize: 11,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.bold,
     letterSpacing: 2.2,
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
@@ -776,6 +857,7 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
   },
   tabPill: {
     flex: 1,
+    minHeight: 40,
     paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -786,7 +868,7 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
   },
   tabPillText: {
     color: colors.text.muted,
-    fontSize: 12,
+    fontSize: typography.size.xs,
   },
   tabPillTextActive: {
     color: colors.amber.DEFAULT,
@@ -824,7 +906,7 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
   },
   filterChipText: {
     color: colors.text.muted,
-    fontSize: 13,
+    fontSize: typography.size.sm,
     fontWeight: typography.weight.medium,
   },
   filterChipTextActive: {
@@ -868,12 +950,12 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
   },
   readChapterLinkText: {
     color: colors.amber.DEFAULT,
-    fontSize: 11,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.medium,
   },
   bibleVerseText: {
     color: colors.text.primary,
-    fontSize: 14,
+    fontSize: typography.size.base,
     lineHeight: 22,
     fontStyle: 'italic',
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
@@ -891,7 +973,7 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
   },
   connectToMemorialBtnText: {
     color: colors.text.secondary,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.medium,
   },
   loadingContainer: {
@@ -906,12 +988,15 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
     fontSize: typography.size.sm,
     fontStyle: 'italic',
   },
-  emptyContainer: {
+  emptyScroll: {
     flex: 1,
+  },
+  emptyContainer: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing['8'],
-    paddingTop: spacing['10'],
+    paddingHorizontal: spacing['6'],
+    paddingTop: spacing['6'],
     gap: spacing['3'],
     maxWidth: 680,
     width: '100%',
@@ -957,7 +1042,7 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
   },
   suggestionsLabel: {
     color: colors.text.muted,
-    fontSize: 10,
+    fontSize: typography.size.micro,
     fontWeight: typography.weight.bold,
     letterSpacing: 1.5,
   },
@@ -976,44 +1061,8 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
   },
   suggestionChipText: {
     color: colors.amber.DEFAULT,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     fontWeight: typography.weight.medium,
-  },
-  tabPillContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  tabPillBadge: {
-    backgroundColor: colors.amber.DEFAULT,
-    borderRadius: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  tabPillBadgeText: {
-    color: colors.text.onAmber,
-    fontSize: 8,
-    fontWeight: typography.weight.bold,
-    letterSpacing: 0.5,
-  },
-  scriptureHintBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    marginHorizontal: spacing['5'],
-    marginTop: spacing['2'],
-    backgroundColor: isDark ? 'rgba(231, 176, 117, 0.08)' : 'rgba(184, 126, 40, 0.07)',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: isDark ? 'rgba(231, 176, 117, 0.18)' : 'rgba(184, 126, 40, 0.20)',
-    padding: spacing['3'],
-  },
-  scriptureHintText: {
-    flex: 1,
-    color: isDark ? 'rgba(231, 176, 117, 0.75)' : 'rgba(140, 95, 30, 0.85)',
-    fontSize: 11.5,
-    lineHeight: 16,
-    fontStyle: 'italic',
   },
   resultsMetaRow: {
     paddingVertical: spacing['2'],
@@ -1021,7 +1070,7 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
   },
   resultsMetaText: {
     color: colors.text.muted,
-    fontSize: 11,
+    fontSize: typography.size.xs,
     letterSpacing: 0.2,
   },
   loadMoreBtn: {
@@ -1033,11 +1082,31 @@ function getBuscaStyles(colors: ColorTokens, isDark: boolean) {
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border.DEFAULT,
+    minHeight: 44,
     paddingVertical: 14,
     marginTop: spacing['2'],
     marginBottom: spacing['6'],
   },
   loadMoreBtnText: {
+    color: colors.amber.DEFAULT,
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.medium,
+  },
+  allOccurrencesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing['2'],
+    backgroundColor: colors.bg.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border.DEFAULT,
+    minHeight: 44,
+    paddingHorizontal: spacing['4'],
+    paddingVertical: spacing['3'],
+    marginTop: spacing['1'],
+  },
+  allOccurrencesBtnText: {
     color: colors.amber.DEFAULT,
     fontSize: typography.size.sm,
     fontWeight: typography.weight.medium,

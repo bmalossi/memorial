@@ -7,7 +7,8 @@ import {
   Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useTheme, typography, spacing, radius } from '../../theme';
+import * as Haptics from 'expo-haptics';
+import { useTheme, typography, spacing, radius, getThemedShadows } from '../../theme';
 
 export interface ScriptureVerseItem {
   verse: number;
@@ -46,14 +47,17 @@ export function ScriptureResultCard({
   onCreateMarco,
 }: ScriptureResultCardProps) {
   const { colors, isDark } = useTheme();
+  const themedShadows = getThemedShadows(isDark);
 
   const handleReadInContext = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (onNavigateToPassage) {
       onNavigateToPassage(passage.book_slug, passage.chapter, passage.start_verse);
     }
   };
 
   const handleCreateMarco = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (onCreateMarco) {
       onCreateMarco(passage);
     }
@@ -63,13 +67,12 @@ export function ScriptureResultCard({
     <View
       style={[
         s.container,
+        themedShadows.card,
         {
           backgroundColor: colors.bg.surface,
-          borderColor: isDark ? 'rgba(231, 176, 117, 0.22)' : 'rgba(184, 126, 40, 0.25)',
+          borderColor: colors.amber.glow,
         },
       ]}
-      accessible={true}
-      accessibilityLabel={`Passagem Bíblica: ${passage.reference}`}
     >
       {/* ── Fita Dourada Decorativa de Abertura Contemplativa ── */}
       <View
@@ -83,8 +86,14 @@ export function ScriptureResultCard({
 
       {/* ── Cabeçalho Nobre com Referência e Badge ACF ── */}
       <View style={s.header}>
-        <View style={s.headerMeta}>
+        <View
+          style={s.headerMeta}
+          accessible={true}
+          accessibilityRole="header"
+          accessibilityLabel={`Passagem Bíblica: ${passage.reference}`}
+        >
           <Text
+            maxFontSizeMultiplier={1.3}
             style={[
               s.categoryLabel,
               { color: colors.amber.DEFAULT },
@@ -101,12 +110,15 @@ export function ScriptureResultCard({
           style={[
             s.versionBadge,
             {
-              backgroundColor: isDark ? 'rgba(231, 176, 117, 0.12)' : 'rgba(184, 126, 40, 0.14)',
-              borderColor: isDark ? 'rgba(231, 176, 117, 0.3)' : 'rgba(184, 126, 40, 0.35)',
+              backgroundColor: colors.amber.muted,
+              borderColor: colors.amber.glow,
             },
           ]}
+          accessible={true}
+          accessibilityLabel={`Versão ${passage.version.toUpperCase()}`}
         >
           <Text
+            maxFontSizeMultiplier={1.3}
             style={[
               s.versionBadgeText,
               { color: colors.amber.DEFAULT },
@@ -122,10 +134,12 @@ export function ScriptureResultCard({
         {passage.verses.map((item) => (
           <View key={item.verse} style={s.verseRow}>
             <Text
+              maxFontSizeMultiplier={1.3}
               style={[
                 s.verseNumber,
                 { color: isDark ? colors.amber.light : colors.amber.dark },
               ]}
+              accessibilityLabel={`Versículo ${item.verse}`}
             >
               {item.verse}
             </Text>
@@ -168,7 +182,7 @@ export function ScriptureResultCard({
           accessibilityLabel={`Ler ${passage.reference} no contexto bíblico completo`}
         >
           <Feather name="book-open" size={14} color={colors.text.secondary} />
-          <Text style={[s.secondaryButtonText, { color: colors.text.secondary }]}>
+          <Text maxFontSizeMultiplier={1.3} style={[s.secondaryButtonText, { color: colors.text.secondary }]}>
             Ler no contexto
           </Text>
         </TouchableOpacity>
@@ -186,7 +200,7 @@ export function ScriptureResultCard({
           accessibilityLabel={`Criar Marco de Fé ancorado em ${passage.reference}`}
         >
           <Feather name="bookmark" size={14} color={colors.text.onAmber} />
-          <Text style={[s.primaryButtonText, { color: colors.text.onAmber }]}>
+          <Text maxFontSizeMultiplier={1.3} style={[s.primaryButtonText, { color: colors.text.onAmber }]}>
             Criar Marco
           </Text>
         </TouchableOpacity>
@@ -204,17 +218,6 @@ const s = StyleSheet.create({
     overflow: 'hidden',
     marginVertical: spacing['3'],
     position: 'relative',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
   },
   goldenRibbon: {
     height: 3,
@@ -293,6 +296,8 @@ const s = StyleSheet.create({
   secondaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
     paddingVertical: spacing['2'],
     paddingHorizontal: spacing['3'],
     borderRadius: radius.sm,
@@ -306,6 +311,8 @@ const s = StyleSheet.create({
   primaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
     paddingVertical: spacing['2'],
     paddingHorizontal: spacing['4'],
     borderRadius: radius.sm,

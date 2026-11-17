@@ -137,4 +137,56 @@ describe('Scripture Thread Service — Consulta Bíblica Direta ("No AI Slop" & 
       }
     }
   });
+
+  it('deve acionar fallback automaticamente quando a Edge Function exceder timeoutMs', async () => {
+    let fallbackCalled = false;
+
+    const slowInvoker = () =>
+      new Promise<{ data: any; error: any }>((resolve) => {
+        setTimeout(() => resolve({ data: { status: 'matched', passage: samplePassage }, error: null }), 150);
+      });
+
+    const mockFallback = async () => {
+      fallbackCalled = true;
+      return { results: sampleFallbackResults, total: 1 };
+    };
+
+    const result = await queryScriptureThread('genealogia de Jesus', {
+      timeoutMs: 25,
+      customInvoker: slowInvoker,
+      customFallback: mockFallback,
+    });
+
+    assert.strictEqual(fallbackCalled, true, 'O fallback deve assumir ao atingir timeoutMs');
+    assert.strictEqual(result.type, 'keyword_results');
+  });
+
+  it('deve rejeitar com AbortError e NÃO acionar fallback quando cancelada via AbortSignal', async () => {
+    let fallbackCalled = false;
+    const controller = new AbortController();
+
+    const slowInvoker = () =>
+      new Promise<{ data: any; error: any }>((resolve) => {
+        setTimeout(() => resolve({ data: { status: 'unclear' }, error: null }), 200);
+      });
+
+    const mockFallback = async () => {
+      fallbackCalled = true;
+      return { results: sampleFallbackResults, total: 1 };
+    };
+
+    setTimeout(() => controller.abort(), 15);
+
+    await assert.rejects(
+      queryScriptureThread('genealogia de Jesus', {
+        signal: controller.signal,
+        timeoutMs: 1000,
+        customInvoker: slowInvoker,
+        customFallback: mockFallback,
+      }),
+      (err: Error) => err.name === 'AbortError'
+    );
+
+    assert.strictEqual(fallbackCalled, false, 'Consulta abortada nunca deve disparar fallback');
+  });
 });
